@@ -22,6 +22,16 @@ def main():
         cur = conn.cursor()
         print(f"Success! Connected to {os.getenv('DB_HOST')}")
         
+        
+        email = input("Enter Email: ")
+        password = input("Enter Password: ")
+        postgres_insert_query = """INSERT INTO users (email, password_hash) VALUES (%s, %s)"""
+        record_to_be_inserted = (email, password)
+        cur.execute(postgres_insert_query, record_to_be_inserted)
+        conn.commit()
+        print("Record inserted successfully!")
+        
+        
         # 3. Fetch the data
         cur.execute("SELECT user_id, email, password_hash FROM users;")
         rows = cur.fetchall()
