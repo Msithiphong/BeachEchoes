@@ -1,0 +1,18 @@
+
+-- 1. Create the table structure
+CREATE TABLE users (
+    user_id SERIAL PRIMARY KEY,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    password_hash VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 2. Insert some sample data
+INSERT INTO users (email, password_hash)
+VALUES 
+    ('alice@example.com', 'sample_password_123'),
+    ('bob@test.com', 'secret_pass_456'),
+    ('charlie@app.com', 'secure_login_789');
+
+-- 3. View the data to confirm it worked
+SELECT * FROM users;
