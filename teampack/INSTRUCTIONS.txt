@@ -1,0 +1,31 @@
+Hello Team,
+
+Here are the instructions to connect to the shared database.
+
+STEP 1: INSTALL
+Open your terminal in this folder and run:
+pip install -r requirements.txt
+
+STEP 2: CREATE CONFIG
+
+Create a new file in this folder named exactly: .env
+
+Paste the following configuration block into that file:
+
+--- PASTE THIS INTO YOUR .ENV FILE ---
+
+DB_NAME=sandbox
+DB_USER=postgres
+DB_PASS=mysecretpassword
+DB_HOST=[INSERT_HOST_HERE]
+DB_PORT=[INSERT_PORT_HERE]
+
+---------------------------------------
+
+STEP 3: RUN
+Run the script:
+python get_users.py
+
+IMPORTANT TROUBLESHOOTING:
+If the script fails to connect, the "tunnel" address may have changed.
+Ping me to get the updated DB_HOST and DB_PORT.
