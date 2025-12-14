@@ -1,106 +1,13 @@
 import os
 import psycopg2
-# added jsonify
-from flask import Flask, request, session, redirect, url_for, render_template_string, jsonify 
+from flask import Flask, request, render_template_string, jsonify
 from dotenv import load_dotenv
 
-# Load database credentials from .env
 load_dotenv()
 
 app = Flask(__name__)
+app.secret_key = os.getenv("FLASK_SECRET_KEY", "dev_secret")  # not used for auth now
 
-
-app.secret_key = os.getenv("FLASK_SECRET_KEY", "super_secret_key_for_session")
-
-# --- HTML TEMPLATES (Frontend) ---
-# Usually these go in a 'templates' folder, but we keep them here for simplicity.
-
-LOGIN_PAGE = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="bg-gray-900 flex items-center justify-center h-screen text-white">
-    <div class="w-full max-w-md bg-gray-800 p-8 rounded-lg shadow-lg">
-        <h2 class="text-3xl font-bold mb-6 text-center text-teal-400">Welcome Back</h2>
-
-        {% if error %}
-        <div class="bg-red-500 text-white p-3 rounded mb-4 text-center">
-            {{ error }}
-        </div>
-        {% endif %}
-
-        <form method="POST" action="/login">
-            <div class="mb-4">
-                <label class="block text-gray-300 mb-2">Email Address</label>
-                <input type="email" name="email" required
-                       class="w-full p-3 rounded bg-gray-700 border border-gray-600 focus:outline-none focus:border-teal-400">
-            </div>
-            <div class="mb-6">
-                <label class="block text-gray-300 mb-2">Password</label>
-                <input type="password" name="password" required
-                       class="w-full p-3 rounded bg-gray-700 border border-gray-600 focus:outline-none focus:border-teal-400">
-            </div>
-            <button type="submit"
-                    class="w-full bg-teal-500 hover:bg-teal-600 text-white font-bold py-3 rounded transition duration-200">
-                Sign In
-            </button>
-        </form>
-
-        <!-- ===== START ADDED: OPTIONAL DEV SHORTCUT LINK ===== -->
-        <p class="text-sm text-gray-300 mt-4">
-            Dev shortcut:
-            <a class="text-teal-300 underline" href="/dev-login?email=cloud_alice@example.com">
-                dev-login as Alice
-            </a>
-        </p>
-        <!-- ===== END ADDED: OPTIONAL DEV SHORTCUT LINK ===== -->
-
-    </div>
-</body>
-</html>
-"""
-
-DASHBOARD_PAGE = """
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Dashboard</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="bg-gray-100 h-screen flex flex-col items-center pt-20">
-    <div class="bg-white p-10 rounded-xl shadow-xl text-center">
-        <h1 class="text-4xl font-bold text-gray-800 mb-4">Success!</h1>
-        <p class="text-xl text-gray-600 mb-8">
-            You are logged in as
-            <span class="text-teal-600 font-bold">{{ email }}</span>
-        </p>
-
-        <!-- ===== START ADDED: LEADERBOARD LINKS ON DASHBOARD ===== -->
-        <div class="flex gap-3 justify-center">
-            <a href="/leaderboard" class="bg-teal-500 hover:bg-teal-600 text-white px-6 py-2 rounded">
-                Leaderboard
-            </a>
-            <a href="/api/leaderboard" class="bg-gray-700 hover:bg-gray-800 text-white px-6 py-2 rounded">
-                Leaderboard JSON
-            </a>
-            <a href="/logout" class="bg-red-500 hover:bg-red-600 text-white px-6 py-2 rounded">
-                Logout
-            </a>
-        </div>
-        <!-- ===== END ADDED: LEADERBOARD LINKS ON DASHBOARD ===== -->
-
-    </div>
-</body>
-</html>
-"""
-
-# LEADERBOARD PAGE TEMPLATE 
 LEADERBOARD_PAGE = """
 <!DOCTYPE html>
 <html lang="en">
@@ -110,126 +17,171 @@ LEADERBOARD_PAGE = """
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-900 text-white min-h-screen">
-  <div class="max-w-3xl mx-auto pt-12 px-4">
+  <div class="max-w-5xl mx-auto pt-10 px-4">
+
     <div class="flex items-center justify-between mb-6">
       <h1 class="text-3xl font-bold text-teal-400">Leaderboard</h1>
-      <div class="flex gap-2">
-        <a href="/dashboard" class="bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded">Dashboard</a>
-        <a href="/logout" class="bg-red-500 hover:bg-red-600 px-4 py-2 rounded">Logout</a>
+      <div class="text-sm text-gray-300">
+        Use Case #14 • BeachEchoes
       </div>
     </div>
 
-    <div class="bg-gray-800 rounded-xl shadow p-4">
-      <table class="w-full text-left">
-        <thead>
-          <tr class="text-gray-300 border-b border-gray-700">
-            <th class="py-2">Rank</th>
-            <th class="py-2">User</th>
-            <th class="py-2">Score</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for row in rows %}
-          <tr class="border-b border-gray-700 {% if row.email == me %}bg-gray-700{% endif %}">
-            <td class="py-2 font-bold">{{ row.rank }}</td>
-            <td class="py-2">{{ row.email }}</td>
-            <td class="py-2 text-teal-300 font-semibold">{{ row.score }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+    <!-- Filters -->
+    <form method="GET" action="/leaderboard" class="bg-gray-800 rounded-xl p-4 mb-6">
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+        <div>
+          <label class="text-sm text-gray-300">View</label>
+          <select name="view" class="w-full mt-1 p-2 rounded bg-gray-700">
+            <option value="users" {% if view=='users' %}selected{% endif %}>Top Users</option>
+            <option value="echoes" {% if view=='echoes' %}selected{% endif %}>Top Echoes</option>
+          </select>
+        </div>
 
-      <p class="text-xs text-gray-400 mt-3">
-        Highlighted row = you. Scoring: +10 per “appraise” reaction received on your echoes.
-      </p>
+        <div>
+          <label class="text-sm text-gray-300">Period</label>
+          <select name="period" class="w-full mt-1 p-2 rounded bg-gray-700">
+            <option value="day" {% if period=='day' %}selected{% endif %}>Today</option>
+            <option value="week" {% if period=='week' %}selected{% endif %}>This Week</option>
+            <option value="month" {% if period=='month' %}selected{% endif %}>This Month</option>
+            <option value="all" {% if period=='all' %}selected{% endif %}>All Time</option>
+          </select>
+        </div>
+
+        <div>
+          <label class="text-sm text-gray-300">Category</label>
+          <select name="category" class="w-full mt-1 p-2 rounded bg-gray-700">
+            <option value="all" {% if category=='all' %}selected{% endif %}>All</option>
+            <option value="general" {% if category=='general' %}selected{% endif %}>General</option>
+            <option value="helpful" {% if category=='helpful' %}selected{% endif %}>Helpful</option>
+            <option value="funny" {% if category=='funny' %}selected{% endif %}>Funny</option>
+            <option value="academic" {% if category=='academic' %}selected{% endif %}>Academic</option>
+          </select>
+        </div>
+
+        <div class="flex items-end">
+          <button class="w-full bg-teal-500 hover:bg-teal-600 font-bold py-2 rounded">
+            Apply Filters
+          </button>
+        </div>
+      </div>
+    </form>
+
+    <!-- Stats -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      <div class="bg-gray-800 rounded-xl p-4">
+        <div class="text-gray-300 text-sm">Echoes ({{ stats.period }})</div>
+        <div class="text-3xl font-bold text-teal-300">{{ stats.echoes }}</div>
+      </div>
+      <div class="bg-gray-800 rounded-xl p-4">
+        <div class="text-gray-300 text-sm">Appraises ({{ stats.period }})</div>
+        <div class="text-3xl font-bold text-teal-300">{{ stats.appraises }}</div>
+      </div>
+      <div class="bg-gray-800 rounded-xl p-4">
+        <div class="text-gray-300 text-sm">Comments ({{ stats.period }})</div>
+        <div class="text-3xl font-bold text-teal-300">{{ stats.comments }}</div>
+      </div>
     </div>
+
+    <!-- Leaderboard -->
+    <div class="bg-gray-800 rounded-xl shadow p-4">
+      {% if view == 'users' %}
+        <h2 class="text-xl font-bold mb-3 text-gray-100">Top Users</h2>
+        <table class="w-full text-left">
+          <thead>
+            <tr class="text-gray-300 border-b border-gray-700">
+              <th class="py-2">Rank</th>
+              <th class="py-2">User</th>
+              <th class="py-2">Score</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in rows %}
+            <tr class="border-b border-gray-700">
+              <td class="py-2 font-bold">{{ row.rank }}</td>
+              <td class="py-2">{{ row.email }}</td>
+              <td class="py-2 text-teal-300 font-semibold">{{ row.score }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% else %}
+        <h2 class="text-xl font-bold mb-3 text-gray-100">Top Echoes</h2>
+        <table class="w-full text-left">
+          <thead>
+            <tr class="text-gray-300 border-b border-gray-700">
+              <th class="py-2">Rank</th>
+              <th class="py-2">Echo</th>
+              <th class="py-2">Author</th>
+              <th class="py-2">Category</th>
+              <th class="py-2">Appraises</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in rows %}
+            <tr class="border-b border-gray-700">
+              <td class="py-2 font-bold">{{ row.rank }}</td>
+              <td class="py-2">{{ row.preview }}</td>
+              <td class="py-2">{{ row.author }}</td>
+              <td class="py-2">{{ row.category }}</td>
+              <td class="py-2 text-teal-300 font-semibold">{{ row.appraises }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      {% endif %}
+    </div>
+
+    <div class="text-xs text-gray-400 mt-4">
+      Scoring demo: +10 points per “appraise” reaction received on a user's echoes.
+    </div>
+
   </div>
 </body>
 </html>
 """
-# LEADERBOARD PAGE TEMPLATE
 
-# --- DATABASE HELPER ---
 def get_db_connection():
     url = os.getenv("DATABASE_URL")
+    if not url:
+        raise RuntimeError("DATABASE_URL missing from .env")
     return psycopg2.connect(url)
 
-# --- ROUTES (Backend Logic) ---
+ALLOWED_PERIODS = {"day": "1 day", "week": "7 days", "month": "30 days", "all": None}
+ALLOWED_VIEWS = {"users", "echoes"}
+ALLOWED_CATEGORIES = {"all", "general", "helpful", "funny", "academic"}
 
-@app.route('/', methods=['GET'])
-def index():
-    # If already logged in, go to dashboard
-    if 'user_email' in session:
-        return redirect(url_for('dashboard'))
-    return redirect(url_for('login'))
+def norm_period(p):
+    p = (p or "week").lower()
+    return p if p in ALLOWED_PERIODS else "week"
 
-# DEV LOGIN (SKIP LOGIN FORM) 
-@app.route('/dev-login', methods=['GET'])
-def dev_login():
-    # Debug-only bypass. Works best when app.run(debug=True)
-    if not app.debug:
-        return "Dev login disabled", 403
+def norm_view(v):
+    v = (v or "users").lower()
+    return v if v in ALLOWED_VIEWS else "users"
 
-    email = request.args.get("email", "cloud_alice@example.com")
-    session["user_email"] = email
-    return redirect(url_for("dashboard"))
-# DEV LOGIN (SKIP LOGIN FORM) 
+def norm_category(c):
+    c = (c or "all").lower()
+    return c if c in ALLOWED_CATEGORIES else "all"
 
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    error = None
-    if request.method == 'POST':
-        email = request.form['email']
-        password = request.form['password']
+def period_sql(col, period):
+    interval = ALLOWED_PERIODS.get(period)
+    if interval is None:
+        return ""
+    return f" AND {col} >= NOW() - INTERVAL '{interval}' "
 
-        try:
-            conn = get_db_connection()
-            cur = conn.cursor()
+def category_sql(category):
+    if category == "all":
+        return ("", [])
+    return (" AND e.category = %s ", [category])
 
-            cur.execute("SELECT password_hash FROM users WHERE email = %s", (email,))
-            user = cur.fetchone()
+def query_user_leaderboard(period="week", category="all", limit=20):
+    period = norm_period(period)
+    category = norm_category(category)
 
-            cur.close()
-            conn.close()
+    t_sql = period_sql("r.created_at", period)
+    c_sql, c_params = category_sql(category)
 
-            if user:
-                db_password = user[0]
-                if db_password == password:
-                    session['user_email'] = email
-                    return redirect(url_for('dashboard'))
-                else:
-                    error = "Invalid password."
-            else:
-                error = "User not found."
-
-        except Exception as e:
-            error = f"Database error: {e}"
-
-    return render_template_string(LOGIN_PAGE, error=error)
-
-@app.route('/dashboard')
-def dashboard():
-    if 'user_email' not in session:
-        return redirect(url_for('login'))
-    return render_template_string(DASHBOARD_PAGE, email=session['user_email'])
-
-@app.route('/logout')
-def logout():
-    session.pop('user_email', None)
-    return redirect(url_for('login'))
-
-#  LEADERBOARD QUERY HELPER 
-def compute_user_leaderboard(limit=20):
-    """
-    Score rule (simple demo):
-    +10 points per 'appraise' reaction received on user's echoes.
-    """
-    conn = get_db_connection()
-    cur = conn.cursor()
-
-    cur.execute("""
+    sql = f"""
         SELECT
-            u.user_id,
             u.email,
             COALESCE(SUM(CASE WHEN r.reaction_type='appraise' THEN 10 ELSE 0 END), 0) AS score,
             RANK() OVER (
@@ -239,35 +191,149 @@ def compute_user_leaderboard(limit=20):
         FROM users u
         LEFT JOIN echoes e ON e.author_user_id = u.user_id
         LEFT JOIN echo_reactions r ON r.echo_id = e.echo_id
+        WHERE 1=1
+        {c_sql}
+        {t_sql}
         GROUP BY u.user_id, u.email
         ORDER BY rank
         LIMIT %s;
-    """, (limit,))
+    """
+    params = c_params + [limit]
 
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute(sql, params)
     rows = cur.fetchall()
     cur.close()
     conn.close()
 
-    return [{"rank": int(r[3]), "user_id": r[0], "email": r[1], "score": int(r[2])} for r in rows]
-# LEADERBOARD QUERY HELPER 
+    return [{"rank": int(r[2]), "email": r[0], "score": int(r[1])} for r in rows]
 
-# LEADERBOARD JSON ENDPOINT 
-@app.route("/api/leaderboard", methods=["GET"])
-def leaderboard_api():
-    if "user_email" not in session:
-        return jsonify({"error": "not_authenticated"}), 401
-    return jsonify(compute_user_leaderboard())
-#  LEADERBOARD JSON ENDPOINT 
+def query_echo_leaderboard(period="week", category="all", limit=20):
+    period = norm_period(period)
+    category = norm_category(category)
 
-# LEADERBOARD VISUAL PAGE ENDPOINT 
+    t_sql = period_sql("r.created_at", period)
+    c_sql, c_params = category_sql(category)
+
+    sql = f"""
+        SELECT
+            e.echo_id,
+            u.email AS author_email,
+            e.category,
+            LEFT(e.content, 120) AS preview,
+            COALESCE(SUM(CASE WHEN r.reaction_type='appraise' THEN 1 ELSE 0 END), 0) AS appraises,
+            RANK() OVER (
+                ORDER BY COALESCE(SUM(CASE WHEN r.reaction_type='appraise' THEN 1 ELSE 0 END), 0) DESC,
+                         e.echo_id ASC
+            ) AS rank
+        FROM echoes e
+        JOIN users u ON u.user_id = e.author_user_id
+        LEFT JOIN echo_reactions r ON r.echo_id = e.echo_id
+        WHERE 1=1
+        {c_sql}
+        {t_sql}
+        GROUP BY e.echo_id, u.email, e.category, e.content
+        ORDER BY rank
+        LIMIT %s;
+    """
+    params = c_params + [limit]
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute(sql, params)
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+
+    return [{
+        "rank": int(r[5]),
+        "echo_id": int(r[0]),
+        "author": r[1],
+        "category": r[2],
+        "preview": r[3],
+        "appraises": int(r[4])
+    } for r in rows]
+
+def query_stats(period="week", category="all"):
+    period = norm_period(period)
+    category = norm_category(category)
+
+    echo_t = period_sql("e.created_at", period)
+    react_t = period_sql("r.created_at", period)
+    comm_t = period_sql("c.created_at", period)
+
+    c_sql, c_params = category_sql(category)
+
+    conn = get_db_connection()
+    cur = conn.cursor()
+
+    cur.execute(f"SELECT COUNT(*) FROM echoes e WHERE 1=1 {c_sql} {echo_t}", c_params)
+    echoes_count = int(cur.fetchone()[0])
+
+    cur.execute(f"""
+        SELECT COUNT(*)
+        FROM echo_reactions r
+        JOIN echoes e ON e.echo_id = r.echo_id
+        WHERE r.reaction_type='appraise'
+        {c_sql}
+        {react_t}
+    """, c_params)
+    appraises_count = int(cur.fetchone()[0])
+
+    cur.execute(f"""
+        SELECT COUNT(*)
+        FROM echo_comments c
+        JOIN echoes e ON e.echo_id = c.echo_id
+        WHERE 1=1
+        {c_sql}
+        {comm_t}
+    """, c_params)
+    comments_count = int(cur.fetchone()[0])
+
+    cur.close()
+    conn.close()
+
+    return {"period": period, "category": category, "echoes": echoes_count, "appraises": appraises_count, "comments": comments_count}
+
+@app.route("/", methods=["GET"])
+def home():
+    return redirect(url_for("leaderboard_page"))
+
 @app.route("/leaderboard", methods=["GET"])
 def leaderboard_page():
-    if "user_email" not in session:
-        return redirect(url_for("login"))
-    rows = compute_user_leaderboard()
-    return render_template_string(LEADERBOARD_PAGE, rows=rows, me=session["user_email"])
-# LEADERBOARD VISUAL PAGE ENDPOINT # added jsonify
+    view = norm_view(request.args.get("view"))
+    period = norm_period(request.args.get("period"))
+    category = norm_category(request.args.get("category"))
 
-if __name__ == '__main__':
-    # Running on port 5000
+    stats = query_stats(period=period, category=category)
+    rows = query_user_leaderboard(period=period, category=category) if view == "users" else query_echo_leaderboard(period=period, category=category)
+
+    return render_template_string(
+        LEADERBOARD_PAGE,
+        rows=rows,
+        view=view,
+        period=period,
+        category=category,
+        stats=stats
+    )
+
+@app.route("/api/leaderboard", methods=["GET"])
+def api_leaderboard():
+    view = norm_view(request.args.get("view"))
+    period = norm_period(request.args.get("period"))
+    category = norm_category(request.args.get("category"))
+
+    if view == "users":
+        return jsonify(query_user_leaderboard(period=period, category=category))
+    return jsonify(query_echo_leaderboard(period=period, category=category))
+
+@app.route("/api/stats", methods=["GET"])
+def api_stats():
+    period = norm_period(request.args.get("period"))
+    category = norm_category(request.args.get("category"))
+    return jsonify(query_stats(period=period, category=category))
+
+if __name__ == "__main__":
     app.run(debug=True, port=5000)
+
