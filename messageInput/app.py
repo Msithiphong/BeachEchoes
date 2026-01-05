@@ -29,7 +29,7 @@ HTML_FORM = '''
 </head>
 <body>
   <div class="container">
-    <h2 class="text-center">Send a Message</h2>
+    <h2 class="text-center">Create an Echo</h2>
     <form method="post" class="mb-3">
       <div class="input-group">
         <input type="text" name="message" class="form-control" placeholder="Type your message..." required>
