@@ -18,8 +18,9 @@ export default function RegisterScreen() {
   const [name, setName] = useState({ value: '', error: '' })
   const [email, setEmail] = useState({ value: '', error: '' })
   const [password, setPassword] = useState({ value: '', error: '' })
+  const [loading, setLoading] = useState(false)
 
-  const onSignUpPressed = () => {
+  const onSignUpPressed = async () => {
     const nameError = nameValidator(name.value)
     const emailError = emailValidator(email.value)
     const passwordError = passwordValidator(password.value)
@@ -29,7 +30,37 @@ export default function RegisterScreen() {
       setPassword({ ...password, error: passwordError })
       return
     }
-    router.replace('/Dashboard')
+
+    setLoading(true)
+
+    try {
+      // Send data to backend API
+      const response = await fetch('http://localhost:3000/api/register', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name: name.value,
+          email: email.value,
+          password: password.value,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        router.replace('/Dashboard')
+      } else {
+        // Handle error
+        setEmail({ ...email, error: data.error || 'Registration failed' })
+      }
+    } catch (error) {
+      console.error('Registration error:', error);
+      setEmail({ ...email, error: 'Network error. Please try again.' })
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -69,6 +100,8 @@ export default function RegisterScreen() {
       <Button
         mode="contained"
         onPress={onSignUpPressed}
+        loading={loading}
+        disabled={loading}
         style={{ marginTop: 24 }}
       >
         Sign Up
