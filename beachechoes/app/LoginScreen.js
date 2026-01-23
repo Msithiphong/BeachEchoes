@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useContext } from 'react'
 import { useRouter } from 'expo-router'
 import { TouchableOpacity, StyleSheet, View } from 'react-native'
 import { Text } from 'react-native-paper'
@@ -11,9 +11,13 @@ import BackButton from '../components/BackButton'
 import { theme } from '../core/theme'
 import { emailValidator } from '../helpers/emailValidator'
 import { passwordValidator } from '../helpers/passwordValidator'
+import { AuthContext } from '../context/AuthContext'
+
+//const API_BASE = 'http://192.168.1.117' // For Max's Mac if running on iOS simulator
 
 export default function LoginScreen() {
   const router = useRouter()
+  const { login } = useContext(AuthContext)
   const [email, setEmail] = useState({ value: '', error: '' })
   const [password, setPassword] = useState({ value: '', error: '' })
   const [loading, setLoading] = useState(false)
@@ -46,6 +50,7 @@ export default function LoginScreen() {
 
       if (data.success) {
         // Login successful - navigate to Dashboard
+        login(data.user)
         router.replace('/Dashboard')
       } else {
         // Invalid credentials
