@@ -16,8 +16,9 @@ export default function LoginScreen() {
   const router = useRouter()
   const [email, setEmail] = useState({ value: '', error: '' })
   const [password, setPassword] = useState({ value: '', error: '' })
+  const [loading, setLoading] = useState(false)
 
-  const onLoginPressed = () => {
+  const onLoginPressed = async () => {
     const emailError = emailValidator(email.value)
     const passwordError = passwordValidator(password.value)
     if (emailError || passwordError) {
@@ -25,7 +26,37 @@ export default function LoginScreen() {
       setPassword({ ...password, error: passwordError })
       return
     }
-    router.replace('/Dashboard')
+
+    setLoading(true)
+
+    try {
+      // Call backend API
+      const response = await fetch('http://localhost:3000/api/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: email.value,
+          password: password.value,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.success) {
+        // Login successful - navigate to Dashboard
+        router.replace('/Dashboard')
+      } else {
+        // Invalid credentials
+        setPassword({ ...password, error: data.error || 'Invalid credentials' })
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+      setPassword({ ...password, error: 'Network error. Please try again.' })
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -61,7 +92,12 @@ export default function LoginScreen() {
           <Text style={styles.forgot}>Forgot your password?</Text>
         </TouchableOpacity>
       </View>
-      <Button mode="contained" onPress={onLoginPressed}>
+      <Button 
+        mode="contained" 
+        onPress={onLoginPressed}
+        loading={loading}
+        disabled={loading}
+      >
         Login
       </Button>
       <View style={styles.row}>
