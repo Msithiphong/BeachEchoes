@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useContext } from 'react'
 import { useRouter } from 'expo-router'
 import { View, StyleSheet, TouchableOpacity } from 'react-native'
 import { Text } from 'react-native-paper'
@@ -12,9 +12,11 @@ import { theme } from '../core/theme'
 import { emailValidator } from '../helpers/emailValidator'
 import { passwordValidator } from '../helpers/passwordValidator'
 import { nameValidator } from '../helpers/nameValidator'
+import { AuthContext } from '../context/AuthContext'
 
 export default function RegisterScreen() {
   const router = useRouter()
+  const { login } = useContext(AuthContext)
   const [name, setName] = useState({ value: '', error: '' })
   const [email, setEmail] = useState({ value: '', error: '' })
   const [password, setPassword] = useState({ value: '', error: '' })
@@ -24,6 +26,18 @@ export default function RegisterScreen() {
     const nameError = nameValidator(name.value)
     const emailError = emailValidator(email.value)
     const passwordError = passwordValidator(password.value)
+    
+    // Edge case: empty fields
+    if (!name.value.trim()) {
+      setName({ ...name, error: 'Name is required' })
+    }
+    if (!email.value.trim()) {
+      setEmail({ ...email, error: 'Email is required' })
+    }
+    if (!password.value.trim()) {
+      setPassword({ ...password, error: 'Password is required' })
+    }
+
     if (emailError || passwordError || nameError) {
       setName({ ...name, error: nameError })
       setEmail({ ...email, error: emailError })
@@ -34,30 +48,60 @@ export default function RegisterScreen() {
     setLoading(true)
 
     try {
-      // Send data to backend API
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 10000) // 10s timeout
+
       const response = await fetch('http://localhost:3000/api/register', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           name: name.value,
           email: email.value,
           password: password.value,
         }),
-      });
+        signal: controller.signal,
+      })
 
-      const data = await response.json();
+      clearTimeout(timeoutId)
+
+      if (!response.ok) {
+        throw new Error(`Server error: ${response.status}`)
+      }
+
+      const data = await response.json()
 
       if (data.success) {
+        login(data.user)
         router.replace('/Dashboard')
       } else {
-        // Handle error
-        setEmail({ ...email, error: data.error || 'Registration failed' })
+        // Edge case: email already exists
+        if (data.error?.includes('unique') || data.error?.includes('already')) {
+          setEmail({ ...email, error: 'Email already registered' })
+        }
+        // Edge case: weak password
+        else if (data.error?.includes('password')) {
+          setPassword({ ...password, error: data.error })
+        }
+        // Generic error
+        else {
+          setEmail({ ...email, error: data.error || 'Registration failed' })
+        }
       }
     } catch (error) {
-      console.error('Registration error:', error);
-      setEmail({ ...email, error: 'Network error. Please try again.' })
+      console.error('Registration error:', error)
+      
+      // Edge case: network timeout
+      if (error.name === 'AbortError') {
+        setEmail({ ...email, error: 'Request timeout. Check your connection.' })
+      }
+      // Edge case: network unavailable
+      else if (error.message.includes('Failed to fetch')) {
+        setEmail({ ...email, error: 'Network error. Server may be offline.' })
+      }
+      // Other network errors
+      else {
+        setEmail({ ...email, error: error.message || 'Network error. Please try again.' })
+      }
     } finally {
       setLoading(false)
     }

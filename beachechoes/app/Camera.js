@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react'
-import { View, TouchableOpacity, StyleSheet } from 'react-native'
+import { View, TouchableOpacity, StyleSheet, Text } from 'react-native'
 import { useRouter } from 'expo-router'
 import { CameraView, useCameraPermissions } from 'expo-camera'
 import BackButton from '../components/BackButton'
@@ -47,8 +47,10 @@ export default function CameraScreen() {
 
   return (
     <View style={styles.container}>
-      <CameraView style={styles.camera} ref={cameraRef} />
-      <BackButton goBack={() => router.back()} />
+      <View style={styles.cameraContainer}>
+        <CameraView style={styles.camera} ref={cameraRef} />
+        <BackButton goBack={() => router.back()} />
+      </View>
       <TouchableOpacity
         style={styles.captureButton}
         onPress={takePicture}
@@ -64,8 +66,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#000',
-    justifyContent: 'center',
-    alignItems: 'center',
+  },
+  cameraContainer: {
+    flex: 1,
+    position: 'relative',
   },
   camera: {
     flex: 1,
