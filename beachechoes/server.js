@@ -14,10 +14,11 @@ const sql = neon(process.env.DATABASE_URL)
 app.post('/api/login', async (req, res) => {
   try {
     const { email, password } = req.body
-    const users = await sql`SELECT * FROM users WHERE email = ${email}`
+    const users = await sql`SELECT user_id AS id, name, email, password_hash, created_at FROM users WHERE email = ${email}`
     
-    if (users.length && users[0].password === password) {
-      res.json({ success: true, user: users[0] })
+    if (users.length && users[0].password_hash === password) {
+      const { password_hash, ...userWithoutPassword } = users[0]
+      res.json({ success: true, user: userWithoutPassword })
     } else {
       res.json({ success: false, error: 'Invalid credentials' })
     }
@@ -30,9 +31,9 @@ app.post('/api/register', async (req, res) => {
   try {
     const { name, email, password } = req.body
     const result = await sql`
-      INSERT INTO users (name, email, password, created_at)
+      INSERT INTO users (name, email, password_hash, created_at)
       VALUES (${name}, ${email}, ${password}, NOW())
-      RETURNING id, name, email, created_at
+      RETURNING user_id AS id, name, email, created_at
     `
     res.json({ success: true, user: result[0] })
   } catch (error) {
