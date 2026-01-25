@@ -5,16 +5,50 @@ How to run the app when you first clone from github
    npm install
    ```
 
-2. Start the app
+2. Start the front end
 
    ```bash
    npx expo start
    ```
 
-HOW TO DEVELOP W/ GITHUB:
+3. Create a new terminal in the IDE of your choice
+
+4. Then you need to start the back end in that new Terminal
+
+   ```bash
+   node server.js
+   ```
+
+
+HOW TO COMMIT and PUSH to GITHUB:
 1. Fork the main Branch
 2. Develop the code
-3. Create a Pull Request and have someone review to merge to main
+3. Check status of changes
+   ```bash
+   git status
+   ```
+
+4. Stage files to commit
+   ```bash
+   git add .
+   ```
+   (or `git add filename` for specific files)
+
+5. Commit with a message
+   ```bash
+   git commit -m "Your commit message here"
+   ```
+
+6. Push to your branch
+   ```bash
+   git push origin your-branch-name
+   ```
+
+7. Create a Pull Request on GitHub
+   - Go to your fork on GitHub
+   - Click "Compare & pull request"
+   - Add description and submit for review
+
 
 CODEBASE ARCHITECTURE / LAYOUT
 
