@@ -27,12 +27,7 @@ export default function StartScreen() {
       >
         Sign Up
       </Button>
-      <Button
-        mode="outlined"
-        onPress={() => router.push("/Camera")}
-      >
-        Camera
-      </Button>
+      
         
     </Background>
   )
