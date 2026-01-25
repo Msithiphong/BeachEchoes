@@ -11,6 +11,10 @@ How to run the app when you first clone from github
    npx expo start
    ```
 
+HOW TO DEVELOP W/ GITHUB:
+1. Fork the main Branch
+2. Develop the code
+3. Create a Pull Request and have someone review to merge to main
 
 CODEBASE ARCHITECTURE / LAYOUT
 
