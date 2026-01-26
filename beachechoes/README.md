@@ -1,5 +1,5 @@
 How to run the app when you first clone from github
-1. Install dependencies
+1. Install dependencies after cloning for the first time (only need to do once)
 
    ```bash
    npm install
