@@ -1,4 +1,10 @@
 How to run the app when you first clone from github
+
+If you don't have node you need to install from this website:
+
+https://nodejs.org/en
+
+
 1. Install dependencies after cloning for the first time (only need to do once)
 
    ```bash
