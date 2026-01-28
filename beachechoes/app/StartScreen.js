@@ -27,6 +27,12 @@ export default function StartScreen() {
       >
         Sign Up
       </Button>
+      <Button
+        mode="outlined"
+        onPress={() => router.push('/Dashboard')}
+      >
+        Dashboard
+      </Button>
       
         
     </Background>

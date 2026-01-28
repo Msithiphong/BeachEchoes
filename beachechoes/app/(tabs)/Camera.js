@@ -2,8 +2,8 @@ import React, { useRef, useState } from 'react'
 import { View, TouchableOpacity, StyleSheet, Text } from 'react-native'
 import { useRouter } from 'expo-router'
 import { CameraView, useCameraPermissions } from 'expo-camera'
-import BackButton from '../components/BackButton'
-import { theme } from '../core/theme'
+import BackButton from '../../components/BackButton'
+import { theme } from '../../core/theme'
 
 export default function CameraScreen() {
   const router = useRouter()
