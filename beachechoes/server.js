@@ -41,4 +41,43 @@ app.post('/api/register', async (req, res) => {
   }
 })
 
+app.post('/api/forgotPassword', async (req, res) => {
+  try {
+    const { email } = req.body
+    const result = await sql `
+      SELECT * FROM users WHERE email = ${email} 
+    `
+    
+    if (result.length > 0) {
+      // User found - send success response
+      // In production, you'd send and actual email here
+      res.json({ success: true, message: 'Password reset instructions sent to email' })
+    } else {
+      res.json({ success: false, error: 'Email not found'})
+    }
+  } catch (error) {
+    res.json({ success: false, error: error.message})
+  }
+})
+
+app.post('/api/messages', async (req, res) => {
+  try {
+    const { message } = req.body
+    
+    if (!message || !message.trim()) {
+      return res.json({ success: false, error: 'Message is required' })
+    }
+    
+    const result = await sql`
+      INSERT INTO messages (message, created_at)
+      VALUES (${message}, NOW())
+      RETURNING id, message, created_at
+    `
+    
+    res.json({ success: true, message: result[0] })
+  } catch (error) {
+    res.json({ success: false, error: error.message })
+  }
+})
+
 app.listen(3000, () => console.log('Server running on http://localhost:3000'))

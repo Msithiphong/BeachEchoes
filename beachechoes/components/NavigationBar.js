@@ -15,7 +15,8 @@ export default function NavigationBar() {
     { key: 'discover', title: 'Discover', icon: 'favorite', route: '/(tabs)/Discover'},
     { key: 'post', title: 'Post', icon: 'add-circle', route: '/(tabs)/Camera' },
     { key: 'leaderboard', title: 'Leaderboard', icon: 'leaderboard', route: '/(tabs)/Leaderboard' },
-    { key: 'profile', title: 'Profile', icon: 'person', route: '/(tabs)/Profile'}
+    { key: 'profile', title: 'Profile', icon: 'person', route: '/(tabs)/Profile'},
+    { key: 'message', title: 'Message', icon: 'chat', route: '/(tabs)/Messages'}
   ])
 
   // Sync index with current route
