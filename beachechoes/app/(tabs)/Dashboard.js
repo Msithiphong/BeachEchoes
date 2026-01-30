@@ -27,12 +27,6 @@ export default function Dashboard() {
         </Paragraph>
         <Button
           mode="outlined"
-          onPress={() => router.push("/Camera")}
-        >
-          Camera
-        </Button>
-        <Button
-          mode="outlined"
           onPress={handleLogout}
         >
           Logout

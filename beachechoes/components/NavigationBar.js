@@ -33,9 +33,6 @@ export default function NavigationBar() {
   }
 
   const renderIcon = ({ route, focused, color }) => {
-    /*if (route.key === 'home') {
-      return <AntDesign name={route.icon} size={24} color={color} />
-    }*/
     return <MaterialIcons name={route.icon} size={28} color={color} />
   }
 
