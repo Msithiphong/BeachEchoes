@@ -12,13 +12,36 @@ export default function ResetPasswordScreen() {
   const router = useRouter()
   const [email, setEmail] = useState({ value: '', error: '' })
 
-  const sendResetPasswordEmail = () => {
+  const sendResetPasswordEmail = async () => {
     const emailError = emailValidator(email.value)
     if (emailError) {
       setEmail({ ...email, error: emailError })
       return
     }
-    router.push('/LoginScreen')
+
+    // Call backend API
+    
+    try {
+      const response = await fetch('http://localhost:3000/api/forgotPassword', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: email.value
+        }),
+      });
+      const data = await response.json();
+
+      if (data.success) {
+        router.push('/Login')
+      } else {
+        setEmail({ ...email, error: data.error || 'Failed to send reset email' })
+      }
+    } catch (error) {
+      console.error('Something went wrong with API', error)
+      setEmail({ ...email, error: 'Network error. Please try again.' })
+    }
   }
 
   return (
