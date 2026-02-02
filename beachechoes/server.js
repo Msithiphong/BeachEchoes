@@ -80,4 +80,45 @@ app.post('/api/messages', async (req, res) => {
   }
 })
 
+// GET user profile
+app.get('/api/profile/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params
+
+    const result = await sql`
+      SELECT user_id AS id, name, bio
+      FROM users
+      WHERE user_id = ${userId}
+    `
+
+    if (!result.length) {
+      return res.json({ success: false, error: 'Profile not found' })
+    }
+
+    res.json({ success: true, profile: result[0] })
+  } catch (error) {
+    res.json({ success: false, error: error.message })
+  }
+})
+
+app.put('/api/profile/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params
+    const { name, bio } = req.body
+
+    const result = await sql`
+      UPDATE users
+      SET name = ${name}, bio = ${bio}
+      WHERE user_id = ${userId}
+      RETURNING user_id AS id, name, bio
+    `
+
+    res.json({ success: true, profile: result[0] })
+  } catch (error) {
+    res.json({ success: false, error: error.message })
+  }
+})
+
+
+
 app.listen(3000, () => console.log('Server running on http://localhost:3000'))
