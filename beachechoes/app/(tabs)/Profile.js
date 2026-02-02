@@ -5,6 +5,8 @@ import Header from '../../components/Header'
 import Button from '../../components/Button'
 import { AuthContext } from '../../context/AuthContext'
 
+
+
 const API_BASE = 'http://localhost:3000/api'
 
 export default function Profile() {
@@ -71,95 +73,171 @@ export default function Profile() {
       <Header>Profile</Header>
 
       <View style={styles.container}>
-        {/* Profile Image */}
-        <Image
-          source={{ uri: 'https://via.placeholder.com/120' }}
-          style={styles.avatar}
-        />
+  {/* Profile Card */}
+  <View style={styles.card}>
+    {/* Avatar */}
+    <Image
+      source={{ uri: 'https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png' }}
+      style={styles.avatar}
+    />
 
-        {/* Username */}
-        {editing ? (
-          <TextInput
-            style={styles.input}
-            value={name}
-            onChangeText={setName}
-          />
-        ) : (
-          <Text style={styles.username}>{name}</Text>
-        )}
+    {/* Name */}
+    {editing ? (
+      <TextInput
+        style={styles.nameInput}
+        value={name}
+        onChangeText={setName}
+      />
+    ) : (
+      <Text style={styles.username}>{name}</Text>
+    )}
 
-        {/* Bio */}
-        {editing ? (
-          <TextInput
-            style={[styles.input, styles.bio]}
-            value={bio}
-            onChangeText={setBio}
-            placeholder="Write a short bio..."
-            multiline
-          />
-        ) : (
-          <Text style={styles.bioText}>
-            {bio || 'No bio yet'}
-          </Text>
-        )}
+    {/* Bio */}
+    {editing ? (
+      <TextInput
+        style={styles.bioInput}
+        value={bio}
+        onChangeText={setBio}
+        placeholder="Write a short bio..."
+        multiline
+      />
+    ) : (
+      <Text style={styles.bioText}>
+        {bio || 'No bio yet'}
+      </Text>
+    )}
+  </View>
 
-        {/* Stats (placeholder for now) */}
-        <View style={styles.stats}>
-          <Text>🌊 Echoes: 0</Text>
-          <Text>⬆️ Upvotes: 0</Text>
-        </View>
+  {/* Stats */}
+  <View style={styles.statsCard}>
+    <View style={styles.statItem}>
+      <Text style={styles.statNumber}>0</Text>
+      <Text style={styles.statLabel}>Echoes</Text>
+    </View>
+    <View style={styles.statItem}>
+      <Text style={styles.statNumber}>0</Text>
+      <Text style={styles.statLabel}>Upvotes</Text>
+    </View>
+  </View>
 
-        {/* Buttons */}
-        {editing ? (
-          <Button onPress={saveProfile}>Save Profile</Button>
-        ) : (
-          <Button onPress={() => setEditing(true)}>Edit Profile</Button>
-        )}
-      </View>
+  {/* Action */}
+  {editing ? (
+    <Button onPress={saveProfile}>Save Profile</Button>
+  ) : (
+    <Button onPress={() => setEditing(true)}>Edit Profile</Button>
+  )}
+</View>
+
     </Background>
   )
 }
 
 const styles = StyleSheet.create({
   container: {
+    padding: 30, 
+  },
+
+  card: {
     alignItems: 'center',
-    padding: 20,
+    padding: 32, 
+    borderRadius: 20,
+    backgroundColor: '#fff',
+    marginBottom: 30, 
+    shadowColor: '#000',
+    shadowOpacity: 0.07,
+    shadowRadius: 12,
+    elevation: 4,
   },
+
   avatar: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    marginBottom: 15,
+    width: 180, 
+    height: 180,
+    borderRadius: 90,
+    marginBottom: 20,
+    backgroundColor: '#eee',
   },
+
   username: {
-    fontSize: 22,
-    fontWeight: 'bold',
+    fontSize: 28, 
+    fontWeight: '700',
   },
-  bioText: {
-    marginTop: 8,
-    color: 'gray',
-    textAlign: 'center',
-  },
-  stats: {
-    flexDirection: 'row',
-    gap: 20,
-    marginVertical: 20,
-  },
-  input: {
-    borderWidth: 1,
-    borderRadius: 8,
+
+  nameInput: {
+    fontSize: 24, 
+    borderBottomWidth: 2,
     width: '100%',
-    padding: 10,
-    marginTop: 10,
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+
+  bioText: {
+    marginTop: 12,
+    color: '#666',
+    fontSize: 16, 
     textAlign: 'center',
   },
-  bio: {
-    height: 80,
+
+  bioInput: {
+    marginTop: 12,
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 14,
+    width: '100%',
+    textAlignVertical: 'top',
+    fontSize: 16,
   },
+
+  statsCard: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    padding: 20,
+    borderRadius: 18,
+    backgroundColor: '#fff',
+    marginBottom: 30,
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 12,
+    elevation: 3,
+  },
+
+  statItem: {
+    alignItems: 'center',
+  },
+
+  statNumber: {
+    fontSize: 22,
+    fontWeight: '700',
+  },
+
+  statLabel: {
+    color: '#777',
+    fontSize: 14,
+  },
+
   center: {
     textAlign: 'center',
-    marginTop: 20,
+    marginTop: 24,
   },
-})
+
+  editProfileButton: {
+    marginTop: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    backgroundColor: '#6e5ef6', 
+    alignItems: 'center',
+  },
+
+  editProfileButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '600',
+  },
+});
+
+
+
+
+
 
 
