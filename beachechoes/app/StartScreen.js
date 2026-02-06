@@ -5,6 +5,8 @@ import Logo from '../components/Logo'
 import Header from '../components/Header'
 import Button from '../components/Button'
 import Paragraph from '../components/Paragraph'
+import Notifications from '../components/Notifications'
+
 
 export default function StartScreen() {
   const router = useRouter()
@@ -33,6 +35,13 @@ export default function StartScreen() {
       >
         Dashboard
       </Button>
+      <Button
+        mode="outlined"
+        onPress={() => router.push('/ButtonTests')}
+      >
+        Notifications
+      </Button>
+
       
         
     </Background>
