@@ -45,3 +45,4 @@ app-example
 
 # firebase credentials
 serviceAccountKey.json
+.env
