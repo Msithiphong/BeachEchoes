@@ -12,8 +12,8 @@ import { theme } from '../core/theme'
 import { emailValidator } from '../helpers/emailValidator'
 import { passwordValidator } from '../helpers/passwordValidator'
 import { AuthContext } from '../context/AuthContext'
-
-//const API_BASE = 'http://192.168.1.117' // For Max's Mac if running on iOS simulator
+import { signInWithEmailAndPassword } from 'firebase/auth'
+import { auth } from '../config/firebase'
 
 export default function LoginScreen() {
   const router = useRouter()
@@ -34,31 +34,65 @@ export default function LoginScreen() {
     setLoading(true)
 
     try {
-      // Call backend API
-      const response = await fetch('http://localhost:3000/api/login', {
+      const userCredential = await signInWithEmailAndPassword(
+        auth,
+        email.value,
+        password.value
+      )
+
+      // Get ID token
+      const idToken = await userCredential.user.getIdToken()
+
+      // Sync to Neon DB (ensures row exists)
+      const syncResponse = await fetch('http://localhost:3000/api/users/sync', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`
         },
         body: JSON.stringify({
-          email: email.value,
-          password: password.value,
-        }),
-      });
+          display_name: userCredential.user.displayName
+        })
+      })
 
-      const data = await response.json();
-
-      if (data.success) {
-        // Login successful - navigate to Dashboard
-        login(data.user)
-        router.replace('/Dashboard')
-      } else {
-        // Invalid credentials
-        setPassword({ ...password, error: data.error || 'Invalid credentials' })
+      const syncData = await syncResponse.json()
+      if (!syncData.success) {
+        console.error('Failed to sync user to database:', syncData.error)
+        // Continue anyway - user is authenticated in Firebase
       }
+
+      // Login successful - update AuthContext
+      login({
+        uid: userCredential.user.uid,
+        email: userCredential.user.email,
+        name: userCredential.user.displayName
+      })
+
+      router.replace('/Dashboard')
     } catch (error) {
-      console.error('Login error:', error);
-      setPassword({ ...password, error: 'Network error. Please try again.' })
+      console.error('Login error:', error)
+      
+      switch (error.code) {
+        case 'auth/invalid-credential':
+        case 'auth/user-not-found':
+        case 'auth/wrong-password':
+          setPassword({ ...password, error: 'Invalid email or password' })
+          break
+        case 'auth/invalid-email':
+          setEmail({ ...email, error: 'Invalid email address' })
+          break
+        case 'auth/user-disabled':
+          setEmail({ ...email, error: 'Account has been disabled' })
+          break
+        case 'auth/too-many-requests':
+          setPassword({ ...password, error: 'Too many failed attempts. Try again later.' })
+          break
+        case 'auth/network-request-failed':
+          setPassword({ ...password, error: 'Network error. Check your connection.' })
+          break
+        default:
+          setPassword({ ...password, error: 'Login failed. Please try again.' })
+      }
     } finally {
       setLoading(false)
     }

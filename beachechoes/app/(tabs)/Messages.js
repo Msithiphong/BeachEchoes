@@ -1,13 +1,16 @@
-import React, { useState } from 'react'
+import React, { useState, useContext } from 'react'
 import { StyleSheet, Text } from 'react-native'
 import Button from '../../components/Button'
 import Background from '../../components/Background'
 import TextInput from '../../components/TextInput'
+import { AuthContext } from '../../context/AuthContext'
+import { auth } from '../../config/firebase'
 
 import { useRouter } from 'expo-router'
 
 export default function Messages() {
     const router = useRouter()
+    const { user } = useContext(AuthContext)
 
     const [message, setMessage] = useState({ value: '', error: '' })
     const [status, setStatus] = useState({ message: '', error: '' })
@@ -21,10 +24,13 @@ export default function Messages() {
         }
 
         try {
+            const token = await auth.currentUser?.getIdToken()
+            
             const response = await fetch('http://localhost:3000/api/messages', { 
                 method: 'POST', 
                 headers: { 
                     'Content-Type': 'application/json',
+                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
                 }, 
                 body:JSON.stringify({ 
                     message: message.value 
