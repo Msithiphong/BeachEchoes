@@ -5,17 +5,6 @@
 # Firebase credentials
 serviceAccountKey.json
 
-# Python
-__pycache__/
-*.pyc
-*.pyo
-*.db
-*.sqlite
-*.sqlite3
-venv/
-.venv/
-env/
-
 # IDEs
 .vscode/
 .idea/
