@@ -1,21 +1,24 @@
 import React, { useContext, useEffect, useState } from 'react'
-import { View, Text, StyleSheet, Image, TextInput, Alert } from 'react-native'
+import { View, Text, StyleSheet, Image, TextInput, Alert, TouchableOpacity, ActivityIndicator } from 'react-native'
+import * as ImagePicker from 'expo-image-picker'
 import Background from '../../components/Background'
 import Header from '../../components/Header'
 import Button from '../../components/Button'
 import { AuthContext } from '../../context/AuthContext'
-
-
+import { uploadAvatar } from '../../helpers/avatarUpload'
+import { auth } from '../../config/firebase'
 
 const API_BASE = 'http://localhost:3000/api'
 
 export default function Profile() {
-  const { user, updateUser } = useContext(AuthContext)
+  const { user } = useContext(AuthContext)
 
   const [name, setName] = useState(user?.name || '')
   const [bio, setBio] = useState('')
+  const [avatarUrl, setAvatarUrl] = useState(null)
   const [editing, setEditing] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [uploadingAvatar, setUploadingAvatar] = useState(false)
 
   useEffect(() => {
     fetchProfile()
@@ -23,12 +26,13 @@ export default function Profile() {
 
   const fetchProfile = async () => {
     try {
-      const res = await fetch(`${API_BASE}/profile/${user.id}`)
+      const res = await fetch(`${API_BASE}/profile/${user.uid}`)
       const data = await res.json()
 
       if (data.success) {
         setName(data.profile.name)
         setBio(data.profile.bio || '')
+        setAvatarUrl(data.profile.avatar_url)
       }
     } catch (error) {
       console.log('Profile not found yet, using defaults')
@@ -39,10 +43,15 @@ export default function Profile() {
 
   const saveProfile = async () => {
     try {
-      const res = await fetch(`${API_BASE}/profile/${user.id}`, {
+      const token = await auth.currentUser?.getIdToken()
+      
+      const res = await fetch(`${API_BASE}/profile/${user.uid}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, bio }),
+        headers: { 
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({ name, bio, avatarUrl }),
       })
 
       const data = await res.json()
@@ -51,11 +60,47 @@ export default function Profile() {
         throw new Error(data.error)
       }
 
-      updateUser({ ...user, name })
       setEditing(false)
       Alert.alert('Success', 'Profile updated')
     } catch (error) {
       Alert.alert('Error', 'Failed to save profile')
+    }
+  }
+
+  const pickAvatar = async () => {
+    try {
+      // Request permissions
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync()
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Please allow access to your photo library')
+        return
+      }
+
+      // Pick image
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.5, // Reduced for smaller file size
+        base64: false,
+      })
+
+      if (!result.canceled) {
+        setUploadingAvatar(true)
+        try {
+          const uploadedUrl = await uploadAvatar(user.uid, result.assets[0].uri)
+          setAvatarUrl(uploadedUrl)
+          Alert.alert('Success', 'Avatar uploaded! Don\'t forget to save your profile.')
+        } catch (error) {
+          console.error('Upload failed:', error)
+          Alert.alert('Error', 'Failed to upload avatar')
+        } finally {
+          setUploadingAvatar(false)
+        }
+      }
+    } catch (error) {
+      console.error('Image picker error:', error)
+      Alert.alert('Error', 'Failed to pick image')
     }
   }
 
@@ -76,10 +121,24 @@ export default function Profile() {
   {/* Profile Card */}
   <View style={styles.card}>
     {/* Avatar */}
-    <Image
-      source={{ uri: 'https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png' }}
-      style={styles.avatar}
-    />
+    <TouchableOpacity onPress={pickAvatar} disabled={uploadingAvatar}>
+      <View>
+        <Image
+          source={{ 
+            uri: avatarUrl || 'https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png' 
+          }}
+          style={styles.avatar}
+        />
+        {uploadingAvatar && (
+          <View style={styles.avatarOverlay}>
+            <ActivityIndicator size="large" color="#fff" />
+          </View>
+        )}
+        <View style={styles.avatarBadge}>
+          <Text style={styles.avatarBadgeText}>📷</Text>
+        </View>
+      </View>
+    </TouchableOpacity>
 
     {/* Name */}
     {editing ? (
@@ -155,6 +214,36 @@ const styles = StyleSheet.create({
     borderRadius: 90,
     marginBottom: 20,
     backgroundColor: '#eee',
+  },
+
+  avatarOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 90,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  avatarBadge: {
+    position: 'absolute',
+    bottom: 20,
+    right: 10,
+    backgroundColor: '#6e5ef6',
+    borderRadius: 20,
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 3,
+    borderColor: '#fff',
+  },
+
+  avatarBadgeText: {
+    fontSize: 20,
   },
 
   username: {
