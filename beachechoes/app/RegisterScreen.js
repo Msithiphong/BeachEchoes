@@ -13,6 +13,8 @@ import { emailValidator } from '../helpers/emailValidator'
 import { passwordValidator } from '../helpers/passwordValidator'
 import { nameValidator } from '../helpers/nameValidator'
 import { AuthContext } from '../context/AuthContext'
+import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth'
+import { auth } from '../config/firebase'
 
 export default function RegisterScreen() {
   const router = useRouter()
@@ -27,17 +29,6 @@ export default function RegisterScreen() {
     const emailError = emailValidator(email.value)
     const passwordError = passwordValidator(password.value)
     
-    // Edge case: empty fields
-    if (!name.value.trim()) {
-      setName({ ...name, error: 'Name is required' })
-    }
-    if (!email.value.trim()) {
-      setEmail({ ...email, error: 'Email is required' })
-    }
-    if (!password.value.trim()) {
-      setPassword({ ...password, error: 'Password is required' })
-    }
-
     if (emailError || passwordError || nameError) {
       setName({ ...name, error: nameError })
       setEmail({ ...email, error: emailError })
@@ -48,59 +39,64 @@ export default function RegisterScreen() {
     setLoading(true)
 
     try {
-      const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 10000) // 10s timeout
+      const userCredential = await createUserWithEmailAndPassword(
+        auth,
+        email.value,
+        password.value
+      )
 
-      const response = await fetch('http://localhost:3000/api/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: name.value,
-          email: email.value,
-          password: password.value,
-        }),
-        signal: controller.signal,
+      // Update user profile with name
+      await updateProfile(userCredential.user, {
+        displayName: name.value
       })
 
-      clearTimeout(timeoutId)
+      // Get fresh ID token
+      const idToken = await userCredential.user.getIdToken(true)
 
-      if (!response.ok) {
-        throw new Error(`Server error: ${response.status}`)
+      // Sync to Neon DB
+      const syncResponse = await fetch('http://localhost:3000/api/users/sync', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`
+        },
+        body: JSON.stringify({
+          display_name: name.value
+        })
+      })
+
+      const syncData = await syncResponse.json()
+      if (!syncData.success) {
+        console.error('Failed to sync user to database:', syncData.error)
+        // Continue anyway - user is created in Firebase
       }
 
-      const data = await response.json()
+      // Login user with updated profile
+      login({
+        uid: userCredential.user.uid,
+        email: userCredential.user.email,
+        name: name.value
+      })
 
-      if (data.success) {
-        login(data.user)
-        router.replace('/Dashboard')
-      } else {
-        // Edge case: email already exists
-        if (data.error?.includes('unique') || data.error?.includes('already')) {
-          setEmail({ ...email, error: 'Email already registered' })
-        }
-        // Edge case: weak password
-        else if (data.error?.includes('password')) {
-          setPassword({ ...password, error: data.error })
-        }
-        // Generic error
-        else {
-          setEmail({ ...email, error: data.error || 'Registration failed' })
-        }
-      }
+      router.replace('/Dashboard')
     } catch (error) {
       console.error('Registration error:', error)
       
-      // Edge case: network timeout
-      if (error.name === 'AbortError') {
-        setEmail({ ...email, error: 'Request timeout. Check your connection.' })
-      }
-      // Edge case: network unavailable
-      else if (error.message.includes('Failed to fetch')) {
-        setEmail({ ...email, error: 'Network error. Server may be offline.' })
-      }
-      // Other network errors
-      else {
-        setEmail({ ...email, error: error.message || 'Network error. Please try again.' })
+      switch (error.code) {
+        case 'auth/email-already-in-use':
+          setEmail({ ...email, error: 'Email already registered' })
+          break
+        case 'auth/invalid-email':
+          setEmail({ ...email, error: 'Invalid email address' })
+          break
+        case 'auth/weak-password':
+          setPassword({ ...password, error: 'Password should be at least 6 characters' })
+          break
+        case 'auth/network-request-failed':
+          setEmail({ ...email, error: 'Network error. Check your connection.' })
+          break
+        default:
+          setEmail({ ...email, error: 'Registration failed. Please try again.' })
       }
     } finally {
       setLoading(false)

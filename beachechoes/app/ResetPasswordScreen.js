@@ -1,5 +1,7 @@
 import React, { useState } from 'react'
 import { useRouter } from 'expo-router'
+import { StyleSheet } from 'react-native'
+import { Text } from 'react-native-paper'
 import Background from '../components/Background'
 import BackButton from '../components/BackButton'
 import Logo from '../components/Logo'
@@ -7,10 +9,15 @@ import Header from '../components/Header'
 import TextInput from '../components/TextInput'
 import Button from '../components/Button'
 import { emailValidator } from '../helpers/emailValidator'
+import { sendPasswordResetEmail } from 'firebase/auth'
+import { auth } from '../config/firebase'
+import { theme } from '../core/theme'
 
 export default function ResetPasswordScreen() {
   const router = useRouter()
   const [email, setEmail] = useState({ value: '', error: '' })
+  const [loading, setLoading] = useState(false)
+  const [success, setSuccess] = useState(false)
 
   const sendResetPasswordEmail = async () => {
     const emailError = emailValidator(email.value)
@@ -19,28 +26,39 @@ export default function ResetPasswordScreen() {
       return
     }
 
-    // Call backend API
-    
-    try {
-      const response = await fetch('http://localhost:3000/api/forgotPassword', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email: email.value
-        }),
-      });
-      const data = await response.json();
+    setLoading(true)
+    setSuccess(false)
 
-      if (data.success) {
-        router.push('/Login')
-      } else {
-        setEmail({ ...email, error: data.error || 'Failed to send reset email' })
-      }
+    try {
+      await sendPasswordResetEmail(auth, email.value)
+      setSuccess(true)
+      setEmail({ value: '', error: '' })
+      
+      // Navigate back after 2 seconds
+      setTimeout(() => {
+        router.replace('/LoginScreen')
+      }, 2000)
     } catch (error) {
-      console.error('Something went wrong with API', error)
-      setEmail({ ...email, error: 'Network error. Please try again.' })
+      console.error('Password reset error:', error)
+      
+      switch (error.code) {
+        case 'auth/user-not-found':
+          setEmail({ ...email, error: 'No account found with this email' })
+          break
+        case 'auth/invalid-email':
+          setEmail({ ...email, error: 'Invalid email address' })
+          break
+        case 'auth/too-many-requests':
+          setEmail({ ...email, error: 'Too many requests. Try again later.' })
+          break
+        case 'auth/network-request-failed':
+          setEmail({ ...email, error: 'Network error. Check your connection.' })
+          break
+        default:
+          setEmail({ ...email, error: 'Failed to send reset email. Please try again.' })
+      }
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -49,6 +67,11 @@ export default function ResetPasswordScreen() {
       <BackButton goBack={() => router.back()} />
       <Logo />
       <Header>Restore Password</Header>
+      {success && (
+        <Text style={styles.successText}>
+          Password reset email sent! Check your inbox.
+        </Text>
+      )}
       <TextInput
         label="E-mail address"
         returnKeyType="done"
@@ -65,6 +88,8 @@ export default function ResetPasswordScreen() {
       <Button
         mode="contained"
         onPress={sendResetPasswordEmail}
+        loading={loading}
+        disabled={loading}
         style={{ marginTop: 16 }}
       >
         Send Instructions
@@ -72,3 +97,13 @@ export default function ResetPasswordScreen() {
     </Background>
   )
 }
+
+const styles = StyleSheet.create({
+  successText: {
+    fontSize: 14,
+    color: theme.colors.primary,
+    textAlign: 'center',
+    marginBottom: 12,
+    fontWeight: '600',
+  },
+})
