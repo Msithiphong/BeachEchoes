@@ -9,6 +9,7 @@ const require = createRequire(import.meta.url)
 
 dotenv.config()
 
+
 const app = express()
 app.use(cors())
 app.use(express.json({ limit: '50mb' })) // Increased limit for image uploads

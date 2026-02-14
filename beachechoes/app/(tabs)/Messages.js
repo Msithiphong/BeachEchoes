@@ -5,6 +5,7 @@ import Background from '../../components/Background'
 import TextInput from '../../components/TextInput'
 import { AuthContext } from '../../context/AuthContext'
 import { auth } from '../../config/firebase'
+import { API_URL } from '../../config/api'
 
 import { useRouter } from 'expo-router'
 
@@ -26,7 +27,7 @@ export default function Messages() {
         try {
             const token = await auth.currentUser?.getIdToken()
             
-            const response = await fetch('http://localhost:3000/api/messages', { 
+            const response = await fetch(`${API_URL}/api/messages`, { 
                 method: 'POST', 
                 headers: { 
                     'Content-Type': 'application/json',

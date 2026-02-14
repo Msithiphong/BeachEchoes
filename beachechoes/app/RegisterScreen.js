@@ -15,6 +15,7 @@ import { nameValidator } from '../helpers/nameValidator'
 import { AuthContext } from '../context/AuthContext'
 import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth'
 import { auth } from '../config/firebase'
+import { API_URL } from '../config/api'
 
 export default function RegisterScreen() {
   const router = useRouter()
@@ -54,7 +55,7 @@ export default function RegisterScreen() {
       const idToken = await userCredential.user.getIdToken(true)
 
       // Sync to Neon DB
-      const syncResponse = await fetch('http://localhost:3000/api/users/sync', {
+      const syncResponse = await fetch(`${API_URL}/api/users/sync`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

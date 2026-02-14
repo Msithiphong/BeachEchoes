@@ -7,8 +7,7 @@ import Button from '../../components/Button'
 import { AuthContext } from '../../context/AuthContext'
 import { uploadAvatar } from '../../helpers/avatarUpload'
 import { auth } from '../../config/firebase'
-
-const API_BASE = 'http://localhost:3000/api'
+import { API_BASE } from '../../config/api'
 
 export default function Profile() {
   const { user } = useContext(AuthContext)

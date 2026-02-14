@@ -14,6 +14,7 @@ import { passwordValidator } from '../helpers/passwordValidator'
 import { AuthContext } from '../context/AuthContext'
 import { signInWithEmailAndPassword } from 'firebase/auth'
 import { auth } from '../config/firebase'
+import { API_URL } from '../config/api'
 
 export default function LoginScreen() {
   const router = useRouter()
@@ -44,7 +45,7 @@ export default function LoginScreen() {
       const idToken = await userCredential.user.getIdToken()
 
       // Sync to Neon DB (ensures row exists)
-      const syncResponse = await fetch('http://localhost:3000/api/users/sync', {
+      const syncResponse = await fetch(`${API_URL}/api/users/sync`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

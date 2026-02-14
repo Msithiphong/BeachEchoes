@@ -1,4 +1,5 @@
 import { auth } from '../config/firebase'
+import { API_URL } from '../config/api'
 
 /**
  * Upload avatar image to Firebase Storage via backend API
@@ -26,7 +27,7 @@ export async function uploadAvatar(userId, imageUri) {
         
         try {
           // Send to backend with auth token
-          const uploadResponse = await fetch(`http://localhost:3000/api/profile/${userId}/avatar`, {
+          const uploadResponse = await fetch(`${API_URL}/api/profile/${userId}/avatar`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
