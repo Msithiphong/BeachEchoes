@@ -1,5 +1,7 @@
 import React, { useContext, useEffect, useState } from 'react'
-import { View, Text, StyleSheet, Image, TextInput, Alert, TouchableOpacity, ActivityIndicator } from 'react-native'
+import { View, Text, StyleSheet, Image, TextInput, Alert,
+  TouchableOpacity, ActivityIndicator, Switch, ScrollView,
+} from 'react-native'
 import * as ImagePicker from 'expo-image-picker'
 import Background from '../../components/Background'
 import Header from '../../components/Header'
@@ -9,18 +11,26 @@ import { uploadAvatar } from '../../helpers/avatarUpload'
 import { auth } from '../../config/firebase'
 import { API_BASE } from '../../config/api'
 
+// Card watermark logo
+import logo from '../../assets/images/logo.png'
+
 export default function Profile() {
   const { user } = useContext(AuthContext)
 
   const [name, setName] = useState(user?.name || '')
   const [bio, setBio] = useState('')
   const [avatarUrl, setAvatarUrl] = useState(null)
+
+  const [anonymousEchoes, setAnonymousEchoes] = useState(false)
+
   const [editing, setEditing] = useState(false)
   const [loading, setLoading] = useState(true)
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
+  const [saving, setSaving] = useState(false)
 
   useEffect(() => {
     fetchProfile()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const fetchProfile = async () => {
@@ -28,10 +38,18 @@ export default function Profile() {
       const res = await fetch(`${API_BASE}/profile/${user.uid}`)
       const data = await res.json()
 
-      if (data.success) {
-        setName(data.profile.name)
-        setBio(data.profile.bio || '')
-        setAvatarUrl(data.profile.avatar_url)
+      if (data?.success && data?.profile) {
+        setName(data.profile.name ?? '')
+        setBio(data.profile.bio ?? '')
+        setAvatarUrl(data.profile.avatar_url ?? data.profile.avatarUrl ?? null)
+
+        const pref =
+          data.profile.anonymous_echoes ??
+          data.profile.anonymousEchoes ??
+          data.profile.anonymous_echoes_enabled ??
+          false
+
+        setAnonymousEchoes(!!pref)
       }
     } catch (error) {
       console.log('Profile not found yet, using defaults')
@@ -42,45 +60,62 @@ export default function Profile() {
 
   const saveProfile = async () => {
     try {
+      setSaving(true)
       const token = await auth.currentUser?.getIdToken()
-      
+
+      const payload = {
+        // legacy keys (keep for compatibility)
+        name,
+        bio,
+        avatarUrl,
+
+        // recommended keys
+        avatar_url: avatarUrl,
+        anonymous_echoes: anonymousEchoes,
+      }
+
       const res = await fetch(`${API_BASE}/profile/${user.uid}`, {
         method: 'PUT',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
-          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ name, bio, avatarUrl }),
+        body: JSON.stringify(payload),
       })
 
       const data = await res.json()
-
-      if (!data.success) {
-        throw new Error(data.error)
-      }
+      if (!data?.success) throw new Error(data?.error || 'Unknown error')
 
       setEditing(false)
       Alert.alert('Success', 'Profile updated')
     } catch (error) {
+      console.error('Save profile error:', error)
       Alert.alert('Error', 'Failed to save profile')
+    } finally {
+      setSaving(false)
     }
+  }
+
+  // Back/Cancel edit: restores saved values
+  const cancelEditing = async () => {
+    if (saving) return
+    setEditing(false)
+    await fetchProfile()
   }
 
   const pickAvatar = async () => {
     try {
-      // Request permissions
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync()
       if (status !== 'granted') {
         Alert.alert('Permission Required', 'Please allow access to your photo library')
         return
       }
 
-      // Pick image
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ['images'],
         allowsEditing: true,
         aspect: [1, 1],
-        quality: 0.5, // Reduced for smaller file size
+        quality: 0.5,
         base64: false,
       })
 
@@ -89,7 +124,7 @@ export default function Profile() {
         try {
           const uploadedUrl = await uploadAvatar(user.uid, result.assets[0].uri)
           setAvatarUrl(uploadedUrl)
-          Alert.alert('Success', 'Avatar uploaded! Don\'t forget to save your profile.')
+          Alert.alert('Success', "Avatar uploaded! Don't forget to save your profile.")
         } catch (error) {
           console.error('Upload failed:', error)
           Alert.alert('Error', 'Failed to upload avatar')
@@ -112,106 +147,166 @@ export default function Profile() {
     )
   }
 
+  const avatarSize = editing ? 150 : 180
+
   return (
     <Background>
-      <Header>Profile</Header>
+      <Header>{editing ? 'Edit Profile' : 'Profile'}</Header>
 
-      <View style={styles.container}>
-  {/* Profile Card */}
-  <View style={styles.card}>
-    {/* Avatar */}
-    <TouchableOpacity onPress={pickAvatar} disabled={uploadingAvatar}>
-      <View>
-        <Image
-          source={{ 
-            uri: avatarUrl || 'https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png' 
-          }}
-          style={styles.avatar}
-        />
-        {uploadingAvatar && (
-          <View style={styles.avatarOverlay}>
-            <ActivityIndicator size="large" color="#fff" />
-          </View>
+      {/* Make the whole screen scrollable so edit mode never hides controls */}
+      <ScrollView
+        contentContainerStyle={styles.container}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Back button only on edit screen (now always reachable) */}
+        {editing && (
+          <TouchableOpacity style={styles.backButton} onPress={cancelEditing} disabled={saving}>
+            <Text style={styles.backButtonText}>← Back</Text>
+          </TouchableOpacity>
         )}
-        <View style={styles.avatarBadge}>
-          <Text style={styles.avatarBadgeText}>📷</Text>
+
+        {/* Profile Card */}
+        <View style={styles.card}>
+          {/* Watermark behind everything */}
+          <Image
+            source={logo}
+            style={styles.cardWatermark}
+            resizeMode="contain"
+            pointerEvents="none"
+          />
+
+          {/* Avatar */}
+          <TouchableOpacity onPress={pickAvatar} disabled={uploadingAvatar || saving}>
+            <View>
+              <Image
+                source={{
+                  uri:
+                    avatarUrl ||
+                    'https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png',
+                }}
+                style={[
+                  styles.avatar,
+                  { width: avatarSize, height: avatarSize, borderRadius: avatarSize / 2 },
+                ]}
+              />
+              {uploadingAvatar && (
+                <View style={[styles.avatarOverlay, { borderRadius: avatarSize / 2 }]}>
+                  <ActivityIndicator size="large" color="#fff" />
+                </View>
+              )}
+              <View style={styles.avatarBadge}>
+                <Text style={styles.avatarBadgeText}>📷</Text>
+              </View>
+            </View>
+          </TouchableOpacity>
+
+          {/* Name */}
+          {editing ? (
+            <TextInput
+              style={styles.nameInput}
+              value={name}
+              onChangeText={setName}
+              editable={!saving}
+            />
+          ) : (
+            <Text style={styles.username}>{name}</Text>
+          )}
+
+          {/* Bio */}
+          {editing ? (
+            <TextInput
+              style={styles.bioInput}
+              value={bio}
+              onChangeText={setBio}
+              placeholder="Write a short bio..."
+              multiline
+              editable={!saving}
+            />
+          ) : (
+            <Text style={styles.bioText}>{bio || 'No bio yet'}</Text>
+          )}
+
+          {/* Toggle only in edit mode */}
+          {editing && (
+            <View style={styles.toggleRow}>
+              <View style={styles.toggleTextCol}>
+                <Text style={styles.toggleTitle}>Post Echoes anonymously</Text>
+                <Text style={styles.toggleSubtitle}>
+                  When enabled, your username won’t show on new Echoes.
+                </Text>
+              </View>
+
+              <Switch value={anonymousEchoes} onValueChange={setAnonymousEchoes} disabled={saving} />
+            </View>
+          )}
         </View>
-      </View>
-    </TouchableOpacity>
 
-    {/* Name */}
-    {editing ? (
-      <TextInput
-        style={styles.nameInput}
-        value={name}
-        onChangeText={setName}
-      />
-    ) : (
-      <Text style={styles.username}>{name}</Text>
-    )}
+        {/* Stats (FORCED same width as card) */}
+        <View style={styles.statsCard}>
+          <View style={styles.statItem}>
+            <Text style={styles.statNumber}>0</Text>
+            <Text style={styles.statLabel}>Echoes</Text>
+          </View>
 
-    {/* Bio */}
-    {editing ? (
-      <TextInput
-        style={styles.bioInput}
-        value={bio}
-        onChangeText={setBio}
-        placeholder="Write a short bio..."
-        multiline
-      />
-    ) : (
-      <Text style={styles.bioText}>
-        {bio || 'No bio yet'}
-      </Text>
-    )}
-  </View>
+          <View style={styles.statDivider} />
 
-  {/* Stats */}
-  <View style={styles.statsCard}>
-    <View style={styles.statItem}>
-      <Text style={styles.statNumber}>0</Text>
-      <Text style={styles.statLabel}>Echoes</Text>
-    </View>
-    <View style={styles.statItem}>
-      <Text style={styles.statNumber}>0</Text>
-      <Text style={styles.statLabel}>Upvotes</Text>
-    </View>
-  </View>
+          <View style={styles.statItem}>
+            <Text style={styles.statNumber}>0</Text>
+            <Text style={styles.statLabel}>Upvotes</Text>
+          </View>
+        </View>
 
-  {/* Action */}
-  {editing ? (
-    <Button onPress={saveProfile}>Save Profile</Button>
-  ) : (
-    <Button onPress={() => setEditing(true)}>Edit Profile</Button>
-  )}
-</View>
-
+        {/* Action */}
+        {editing ? (
+          <Button onPress={saveProfile} disabled={saving}>
+            {saving ? 'Saving...' : 'Save Profile'}
+          </Button>
+        ) : (
+          <Button onPress={() => setEditing(true)} disabled={saving}>
+            Edit Profile
+          </Button>
+        )}
+      </ScrollView>
     </Background>
   )
 }
 
 const styles = StyleSheet.create({
+  // Scroll container
   container: {
-    padding: 30, 
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 40,
   },
 
   card: {
+    width: '100%',
+    alignSelf: 'stretch',
     alignItems: 'center',
-    padding: 32, 
+    padding: 28,
     borderRadius: 20,
     backgroundColor: '#fff',
-    marginBottom: 30, 
+    marginBottom: 18,
     shadowColor: '#000',
     shadowOpacity: 0.07,
     shadowRadius: 12,
     elevation: 4,
+    overflow: 'hidden',
+  },
+
+  cardWatermark: {
+    position: 'absolute',
+    top: -10,
+    left: -30,
+    right: -30,
+    bottom: -10,
+    opacity: 0.06,
+    transform: [{ rotate: '-10deg' }],
   },
 
   avatar: {
-    width: 180, 
-    height: 180,
-    borderRadius: 90,
-    marginBottom: 20,
+    marginBottom: 18,
     backgroundColor: '#eee',
   },
 
@@ -221,7 +316,6 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    borderRadius: 90,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
     justifyContent: 'center',
     alignItems: 'center',
@@ -229,8 +323,8 @@ const styles = StyleSheet.create({
 
   avatarBadge: {
     position: 'absolute',
-    bottom: 20,
-    right: 10,
+    bottom: 18,
+    right: 8,
     backgroundColor: '#6e5ef6',
     borderRadius: 20,
     width: 40,
@@ -246,27 +340,27 @@ const styles = StyleSheet.create({
   },
 
   username: {
-    fontSize: 28, 
+    fontSize: 28,
     fontWeight: '700',
   },
 
   nameInput: {
-    fontSize: 24, 
+    fontSize: 24,
     borderBottomWidth: 2,
     width: '100%',
     textAlign: 'center',
-    marginBottom: 12,
+    marginBottom: 10,
   },
 
   bioText: {
-    marginTop: 12,
+    marginTop: 10,
     color: '#666',
-    fontSize: 16, 
+    fontSize: 16,
     textAlign: 'center',
   },
 
   bioInput: {
-    marginTop: 12,
+    marginTop: 10,
     borderWidth: 1,
     borderRadius: 12,
     padding: 14,
@@ -275,13 +369,44 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
 
-  statsCard: {
+  toggleRow: {
+    marginTop: 16,
+    width: '100%',
     flexDirection: 'row',
-    justifyContent: 'space-around',
-    padding: 20,
-    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    borderRadius: 12,
+    backgroundColor: '#f6f6fb',
+  },
+
+  toggleTextCol: {
+    flex: 1,
+    paddingRight: 12,
+  },
+
+  toggleTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+
+  toggleSubtitle: {
+    fontSize: 13,
+    color: '#666',
+  },
+
+  // Stats: same width as card + centered content
+  statsCard: {
+    width: '100%',
+    alignSelf: 'stretch',
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: '#fff',
-    marginBottom: 30,
+    borderRadius: 18,
+    paddingVertical: 18,
+    marginBottom: 18,
     shadowColor: '#000',
     shadowOpacity: 0.06,
     shadowRadius: 12,
@@ -289,7 +414,15 @@ const styles = StyleSheet.create({
   },
 
   statItem: {
+    flex: 1,
     alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  statDivider: {
+    width: 1,
+    height: 36,
+    backgroundColor: '#eee',
   },
 
   statNumber: {
@@ -300,28 +433,32 @@ const styles = StyleSheet.create({
   statLabel: {
     color: '#777',
     fontSize: 14,
+    marginTop: 4,
+  },
+
+  backButton: {
+    alignSelf: 'flex-start',
+    marginBottom: 10,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    backgroundColor: '#f0f0f5',
+  },
+
+  backButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
   },
 
   center: {
     textAlign: 'center',
     marginTop: 24,
   },
+})
 
-  editProfileButton: {
-    marginTop: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 8,
-    backgroundColor: '#6e5ef6', 
-    alignItems: 'center',
-  },
 
-  editProfileButtonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '600',
-  },
-});
+
+
 
 
 
