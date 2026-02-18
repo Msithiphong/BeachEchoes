@@ -30,10 +30,9 @@ import { Stack, useRouter } from 'expo-router'
 import Background from '../../components/Background'
 import Button from '../../components/Button'
 
-// Base URL for API calls.
-// NOTE: 10.0.2.2 is the Android emulator “host machine loopback”.
-// If you run on a real phone, you usually must change this to your PC’s LAN IP.
-const API_BASE = 'http://10.0.2.2:3000'
+// Import centralized API configuration
+// This automatically handles iOS (localhost) vs Android (10.0.2.2) differences
+import { API_BASE } from '../../config/api'
 
 // Medal PNGs must exist at these paths.
 // IMPORTANT: require() paths are resolved at build time, so the files must exist.
@@ -108,8 +107,10 @@ export default function Leaderboard() {
     })
 
     // Final URL example:
-    // http://10.0.2.2:3000/api/leaderboard?view=users&period=week&limit=50
-    return `${API_BASE}/api/leaderboard?${params.toString()}`
+    // iOS: http://localhost:3000/api/leaderboard?view=users&period=week&limit=50
+    // Android: http://10.0.2.2:3000/api/leaderboard?view=users&period=week&limit=50
+    // Note: API_BASE already includes '/api', so we don't add it again
+    return `${API_BASE}/leaderboard?${params.toString()}`
   }, [view, period])
 
   // ----------------------------
