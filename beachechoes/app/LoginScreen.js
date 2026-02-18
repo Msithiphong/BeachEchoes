@@ -1,3 +1,22 @@
+/**
+ * LoginScreen Component
+ * 
+ * User authentication screen that handles email/password login via Firebase Auth.
+ * Upon successful authentication, syncs user data to the Neon database and
+ * navigates to the Dashboard.
+ * 
+ * Features:
+ * - Email and password input with validation
+ * - Firebase authentication
+ * - User data sync with backend database
+ * - Comprehensive error handling with specific messages
+ * - Loading state during authentication
+ * - Navigation to password reset
+ * - Navigation to registration screen
+ * 
+ * @component
+ */
+
 import React, { useState, useContext } from 'react'
 import { useRouter } from 'expo-router'
 import { TouchableOpacity, StyleSheet, View } from 'react-native'
@@ -17,13 +36,32 @@ import { auth } from '../config/firebase'
 import { API_URL } from '../config/api'
 
 export default function LoginScreen() {
+  // Navigation and authentication context
   const router = useRouter()
   const { login } = useContext(AuthContext)
+  
+  // Form state with validation errors
   const [email, setEmail] = useState({ value: '', error: '' })
   const [password, setPassword] = useState({ value: '', error: '' })
+  
+  // Loading state for login operation
   const [loading, setLoading] = useState(false)
 
+  /**
+   * Handle login form submission
+   * 
+   * Flow:
+   * 1. Validate email and password
+   * 2. Authenticate with Firebase
+   * 3. Get authentication token
+   * 4. Sync user data to Neon database
+   * 5. Update local auth context
+   * 6. Navigate to Dashboard
+   * 
+   * @async
+   */
   const onLoginPressed = async () => {
+    // Validate inputs
     const emailError = emailValidator(email.value)
     const passwordError = passwordValidator(password.value)
     if (emailError || passwordError) {
@@ -35,16 +73,17 @@ export default function LoginScreen() {
     setLoading(true)
 
     try {
+      // Authenticate with Firebase
       const userCredential = await signInWithEmailAndPassword(
         auth,
         email.value,
         password.value
       )
 
-      // Get ID token
+      // Get Firebase ID token for authenticated API calls
       const idToken = await userCredential.user.getIdToken()
 
-      // Sync to Neon DB (ensures row exists)
+      // Sync user data to Neon DB (creates or updates user record)
       const syncResponse = await fetch(`${API_URL}/api/users/sync`, {
         method: 'POST',
         headers: {
@@ -62,17 +101,19 @@ export default function LoginScreen() {
         // Continue anyway - user is authenticated in Firebase
       }
 
-      // Login successful - update AuthContext
+      // Update local auth context with user data
       login({
         uid: userCredential.user.uid,
         email: userCredential.user.email,
         name: userCredential.user.displayName
       })
 
+      // Navigate to Dashboard
       router.replace('/Dashboard')
     } catch (error) {
       console.error('Login error:', error)
       
+      // Handle specific Firebase auth errors with user-friendly messages
       switch (error.code) {
         case 'auth/invalid-credential':
         case 'auth/user-not-found':
