@@ -214,6 +214,179 @@ app.put('/api/profile/:userId', requireFirebaseAuth, async (req, res) => {
   }
 })
 
+// -------------------- LEADERBOARD (MESSAGES + UPVOTES ONLY) --------------------
 
+const ALLOWED_PERIODS = { day: "1 day", week: "7 days", month: "30 days", all: null };
+const ALLOWED_VIEWS = new Set(["users", "messages"]);
+
+function normPeriod(p) {
+  const v = String(p ?? "week").toLowerCase();
+  return Object.prototype.hasOwnProperty.call(ALLOWED_PERIODS, v) ? v : "week";
+}
+function normView(v) {
+  const s = String(v ?? "users").toLowerCase();
+  return ALLOWED_VIEWS.has(s) ? s : "users";
+}
+function clampLimit(n) {
+  const x = Number.parseInt(n ?? "20", 10);
+  return Number.isFinite(x) ? Math.max(1, Math.min(x, 100)) : 20;
+}
+
+/**
+ * Returns:
+ *  - joinSql: extra SQL to add to JOIN ... ON ... (keeps LEFT JOIN behavior intact)
+ *  - whereSql: extra SQL to add to WHERE ... (used for messages view)
+ *  - params: array of params for prepared statement
+ */
+function buildPeriodFilter(period, col, startIndex = 1) {
+  const interval = ALLOWED_PERIODS[period];
+  if (!interval) {
+    return { sql: "", params: [], nextIndex: startIndex };
+  }
+  // We parametrize the interval string and cast to interval.
+  return {
+    sql: `${col} >= NOW() - $${startIndex}::interval`,
+    params: [interval],
+    nextIndex: startIndex + 1,
+  };
+}
+
+// -------------------- USERS LEADERBOARD --------------------
+// Top Users = SUM of upvotes across their messages
+async function queryUserLeaderboard({ period, limit }) {
+  const params = [];
+  let paramIndex = 1;
+
+  // IMPORTANT: for LEFT JOIN, put time filter in JOIN condition
+  const pf = buildPeriodFilter(period, "m.created_at", paramIndex);
+  params.push(...pf.params);
+  paramIndex = pf.nextIndex;
+
+  // limit param
+  params.push(limit);
+  const limitParam = paramIndex;
+
+  const joinPeriodSql = pf.sql ? `AND ${pf.sql}` : "";
+
+  const q = `
+    SELECT
+      u.user_id AS user_id,
+      u.name,
+      u.bio,
+      u.avatar_url,
+
+      COALESCE(SUM(COALESCE(m.upvote, 0)), 0)::int AS total_upvotes,
+
+      ROW_NUMBER() OVER (
+        ORDER BY
+          COALESCE(SUM(COALESCE(m.upvote, 0)), 0) DESC,
+          u.user_id ASC
+      ) AS rank
+
+    FROM users u
+    LEFT JOIN messages m
+      ON m.user_id = u.user_id
+      ${joinPeriodSql}
+
+    GROUP BY u.user_id, u.name, u.bio, u.avatar_url
+    ORDER BY rank
+    LIMIT $${limitParam};
+  `;
+
+  const rows = await sql.query(q, params);
+
+  return rows.map((r) => ({
+    rank: Number(r.rank),
+    user_id: Number(r.user_id),
+    name: r.name ?? "",
+    bio: r.bio ?? "",
+    avatar_url: r.avatar_url ?? null,
+    total_upvotes: Number(r.total_upvotes),
+  }));
+}
+
+// -------------------- MESSAGES LEADERBOARD --------------------
+// Top Messages = messages ordered by upvotes, tie-break by message id
+async function queryMessageLeaderboard({ period, limit }) {
+  const params = [];
+  let paramIndex = 1;
+
+  // For messages view, WHERE filter is correct (no LEFT JOIN needed)
+  const pf = buildPeriodFilter(period, "m.created_at", paramIndex);
+  params.push(...pf.params);
+  paramIndex = pf.nextIndex;
+
+  params.push(limit);
+  const limitParam = paramIndex;
+
+  const whereSql = pf.sql ? `WHERE ${pf.sql}` : "";
+
+  const q = `
+    SELECT
+      m.id,
+      m.message,
+      m.created_at,
+      COALESCE(m.upvote, 0)::int AS upvotes,
+
+      u.user_id AS author_user_id,
+      u.name AS author_name,
+      u.bio AS author_bio,
+      u.avatar_url AS author_avatar_url,
+
+      ROW_NUMBER() OVER (
+        ORDER BY
+          COALESCE(m.upvote, 0) DESC,
+          m.id ASC
+      ) AS rank
+
+    FROM messages m
+    JOIN users u
+      ON u.user_id = m.user_id
+    ${whereSql}
+    ORDER BY rank
+    LIMIT $${limitParam};
+  `;
+
+  const rows = await sql.query(q, params);
+
+  return rows.map((r) => ({
+    rank: Number(r.rank),
+    id: Number(r.id),
+    message: r.message,
+    created_at: r.created_at,
+    upvotes: Number(r.upvotes),
+    author: {
+      user_id: Number(r.author_user_id),
+      name: r.author_name ?? "",
+      bio: r.author_bio ?? "",
+      avatar_url: r.author_avatar_url ?? null,
+    },
+  }));
+}
+
+// GET /api/leaderboard?view=users|messages&period=day|week|month|all&limit=20
+app.get("/api/leaderboard", async (req, res) => {
+  try {
+    const view = normView(req.query.view);
+    const period = normPeriod(req.query.period);
+    const limit = clampLimit(req.query.limit);
+
+    const data =
+      view === "users"
+        ? await queryUserLeaderboard({ period, limit })
+        : await queryMessageLeaderboard({ period, limit });
+
+    res.json({ success: true, view, period, limit, data });
+  } catch (err) {
+    console.error("GET /api/leaderboard error:", err);
+    res.status(500).json({ success: false, error: "Internal server error" });
+  }
+});
+
+// ------------------ END LEADERBOARD ------------------
+
+//app.listen(3000, '0.0.0.0', () => {
+//  console.log("Server running on http://0.0.0.0:3000");
+//});
 
 app.listen(3000, () => console.log('Server running on http://localhost:3000'))
