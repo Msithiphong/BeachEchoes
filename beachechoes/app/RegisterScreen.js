@@ -193,7 +193,7 @@ export default function RegisterScreen() {
       
       {/* Registration button with loading state */}
       <Button
-        mode="contained"
+        mode="outlined"
         onPress={onSignUpPressed}
         loading={loading}
         disabled={loading}

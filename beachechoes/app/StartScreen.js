@@ -43,7 +43,7 @@ export default function StartScreen() {
       
       {/* Primary action: Navigate to login */}
       <Button
-        mode="contained"
+        mode="outlined"
         onPress={() => router.push('/LoginScreen')}
       >
         Login
