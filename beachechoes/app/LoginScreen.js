@@ -174,7 +174,7 @@ export default function LoginScreen() {
         </TouchableOpacity>
       </View>
       <Button 
-        mode="contained" 
+        mode="outlined" 
         onPress={onLoginPressed}
         loading={loading}
         disabled={loading}
