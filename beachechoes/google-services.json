@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "239688273405",
+    "project_id": "beachechoes",
+    "storage_bucket": "beachechoes.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:239688273405:android:2dafe6713dc40568dd1d94",
+        "android_client_info": {
+          "package_name": "com.csithiphong.beachechoes"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "239688273405-b9sqh2qb42e9iju6u3ndrs8vrv9kb9pd.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDElIXuTNOtCS2hTvfJHFCWWoiS_uXaPd0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "239688273405-b9sqh2qb42e9iju6u3ndrs8vrv9kb9pd.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

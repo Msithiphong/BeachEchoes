@@ -55,17 +55,19 @@ async function requireFirebaseAuth(req, res, next) {
 app.post('/api/users/sync', requireFirebaseAuth, async (req, res) => {
   try {
     const { uid, email, name } = req.firebase
-    const { display_name } = req.body
+    const { display_name, push_token } = req.body // <-- Added push_token
 
     // Upsert: insert if not exists, update if exists
+    // Also added push_token to the INSERT, UPDATE, and RETURNING clauses
     const result = await sql`
-      INSERT INTO users (firebase_uid, email, name, created_at)
-      VALUES (${uid}, ${email}, ${display_name || name || ''}, now())
+      INSERT INTO users (firebase_uid, email, name, push_token, created_at)
+      VALUES (${uid}, ${email}, ${display_name || name || ''}, ${push_token || null}, now())
       ON CONFLICT (firebase_uid)
       DO UPDATE SET
         email = EXCLUDED.email,
-        name = EXCLUDED.name
-      RETURNING user_id, firebase_uid, email, name, avatar_url
+        name = EXCLUDED.name,
+        push_token = COALESCE(EXCLUDED.push_token, users.push_token)
+      RETURNING user_id, firebase_uid, email, name, avatar_url, push_token
     `
 
     res.json({ success: true, user: result[0] })
@@ -118,6 +120,61 @@ app.post('/api/messages', requireFirebaseAuth, async (req, res) => {
     res.status(500).json({ success: false, error: error.message })
   }
 })
+// Upvote a message and trigger notifications
+app.post('/api/messages/:id/upvote', requireFirebaseAuth, async (req, res) => {
+  try {
+    const messageId = req.params.id;
+    const upvoteThreshold = 5; // Notification triggers at exactly 5 upvotes
+
+    // Increment upvote count for the message
+    const updatedMessage = await sql`
+      UPDATE messages 
+      SET upvote = COALESCE(upvote, 0) + 1
+      WHERE id = ${messageId}
+      RETURNING id, user_id, message, upvote
+    `;
+
+    if (!updatedMessage.length) {
+      return res.status(404).json({ success: false, error: 'Message not found' });
+    }
+
+    const msgData = updatedMessage[0];
+
+    // Check if the exact threshold is met (prevents spamming on 6th, 7th upvote, etc.)
+    if (msgData.upvote === upvoteThreshold) {
+      // Fetch the message author's push token
+      const authorResult = await sql`
+        SELECT push_token FROM users WHERE user_id = ${msgData.user_id}
+      `;
+
+      const pushToken = authorResult[0]?.push_token;
+
+      // Send the push notification via Expo if a valid token exists
+      if (pushToken && pushToken.startsWith('ExponentPushToken')) {
+        // Node 18+ has global fetch built-in
+        fetch('https://exp.host/--/api/v2/push/send', {
+          method: 'POST',
+          headers: {
+            'Accept': 'application/json',
+            'Accept-encoding': 'gzip, deflate',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            to: pushToken,
+            title: 'Your Echo is trending!',
+            body: `Your message just hit ${upvoteThreshold} upvotes!`,
+            data: { messageId: msgData.id },
+          }),
+        }).catch(err => console.error('Failed to send push notification:', err));
+      }
+    }
+
+    res.json({ success: true, message: msgData });
+  } catch (error) {
+    console.error('Upvote error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
 
 // Upload avatar to Firebase Storage
 app.post('/api/profile/:userId/avatar', requireFirebaseAuth, async (req, res) => {

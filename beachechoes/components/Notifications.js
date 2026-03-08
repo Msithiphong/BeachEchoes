@@ -1,5 +1,6 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 
 // Configure the notification handler.
 // This MUST be defined at the top level, outside of any component or function.
@@ -76,4 +77,24 @@ export async function sendLocalNotification() {
     // setting trigger to 'null' causes it to fire immediately.
     trigger: null, 
   });
+}
+
+export async function getExpoPushToken() {
+  if (Platform.OS === 'web') return null;
+
+  try {
+    const hasPermission = await requestPermissions();
+    if (!hasPermission) return null;
+
+    // Get the token that uniquely identifies this device
+    const projectId = Constants.expoConfig?.extra?.eas?.projectId;
+    const tokenResponse = await Notifications.getExpoPushTokenAsync({
+      projectId: projectId, 
+    });
+
+    return tokenResponse.data;
+  } catch (error) {
+    console.error("Error fetching push token:", error);
+    return null;
+  }
 }

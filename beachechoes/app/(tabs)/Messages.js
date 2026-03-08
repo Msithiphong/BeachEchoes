@@ -41,6 +41,9 @@ export default function Messages() {
     // State for success/error status messages
     const [status, setStatus] = useState({ message: '', error: '' })
 
+    // State for test upvoting
+    const [upvoteId, setUpvoteId] = useState({ value: '', error: '' })
+
     /**
      * Handle message submission to database
      * 
@@ -96,6 +99,45 @@ export default function Messages() {
         }
     }
 
+    /**
+     * Test function to trigger an upvote on a specific message
+     */
+    const onTestUpvotePressed = async () => {
+        setStatus({ message: '', error: '' })
+
+        if (!upvoteId.value.trim()) {
+            setUpvoteId({ ...upvoteId, error: 'Please enter a message ID' })
+            return
+        }
+
+        try {
+            const token = await auth.currentUser?.getIdToken()
+            
+            // Call the new upvote endpoint
+            const response = await fetch(`${API_URL}/api/messages/${upvoteId.value}/upvote`, { 
+                method: 'POST', 
+                headers: { 
+                    'Content-Type': 'application/json',
+                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                }
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                setStatus({ 
+                    message: `Success! Message ${data.message.id} now has ${data.message.upvote} upvotes.`, 
+                    error: '' 
+                })
+            } else {
+                setStatus({ message: '', error: data.error || 'Failed to upvote message' })
+            }
+
+        } catch (error) {
+            console.log('Network failure', error)
+            setStatus({ message: '', error: 'Network error. Please try again.' })
+        }
+    }
     
 
     return(
@@ -127,6 +169,26 @@ export default function Messages() {
             >
                 Send 2 DB
             </Button>
+            
+            {/* --- NEW UPVOTE TEST SECTION --- */}
+            <Text style={{ marginTop: 30, fontWeight: 'bold' }}>Test Upvote Notifications:</Text>
+            
+            <TextInput 
+                label="Message ID to Upvote"
+                value={upvoteId.value}
+                onChangeText={(text) => setUpvoteId({ value: text, error: '' })}
+                keyboardType="numeric"
+                error={!!upvoteId.error}
+                errorText={upvoteId.error}
+            />
+
+            <Button
+                mode="outlined"
+                onPress={onTestUpvotePressed}
+            >
+                Upvote Message
+            </Button>
+            {/* -------------------------------- */}
             
         </Background>
         </>

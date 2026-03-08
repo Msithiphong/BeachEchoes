@@ -34,6 +34,7 @@ import { AuthContext } from '../context/AuthContext'
 import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth'
 import { auth } from '../config/firebase'
 import { API_URL } from '../config/api'
+import { getExpoPushToken } from '../components/Notifications'
 
 export default function RegisterScreen() {
   // Navigation and authentication context
@@ -93,6 +94,9 @@ export default function RegisterScreen() {
       // Get fresh Firebase ID token for authenticated API calls
       const idToken = await userCredential.user.getIdToken(true)
 
+      // ---> NEW: Fetch the push token from the device <---
+      const pushToken = await getExpoPushToken()
+
       // Sync user data to Neon database
       const syncResponse = await fetch(`${API_URL}/api/users/sync`, {
         method: 'POST',
@@ -101,7 +105,8 @@ export default function RegisterScreen() {
           'Authorization': `Bearer ${idToken}`
         },
         body: JSON.stringify({
-          display_name: name.value
+          display_name: name.value,
+          push_token: pushToken // ---> NEW: Send token to backend <---
         })
       })
 
