@@ -6,6 +6,7 @@ import * as ImagePicker from 'expo-image-picker'
 import Background from '../../components/Background'
 import Header from '../../components/Header'
 import Button from '../../components/Button'
+import ImageCard from '../../components/ImageCard'
 import { AuthContext } from '../../context/AuthContext'
 import { uploadAvatar } from '../../helpers/avatarUpload'
 import { auth } from '../../config/firebase'
@@ -22,6 +23,9 @@ export default function Profile() {
   const [avatarUrl, setAvatarUrl] = useState(null)
 
   const [anonymousEchoes, setAnonymousEchoes] = useState(false)
+
+  const [neonUserId, setNeonUserId] = useState(null)
+  const [messages, setMessages] = useState([])
 
   const [editing, setEditing] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -50,11 +54,29 @@ export default function Profile() {
           false
 
         setAnonymousEchoes(!!pref)
+
+        // Store neon user_id and fetch messages
+        if (data.profile.id) {
+          setNeonUserId(data.profile.id)
+          await fetchMessages(data.profile.id)
+        }
       }
     } catch (error) {
       console.log('Profile not found yet, using defaults')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const fetchMessages = async (userId) => {
+    try {
+      const res = await fetch(`${API_BASE}/messages/user/${userId}`)
+      const data = await res.json()
+      if (data?.success) {
+        setMessages(data.messages ?? [])
+      }
+    } catch (error) {
+      console.log('Failed to fetch messages:', error)
     }
   }
 
@@ -155,6 +177,7 @@ export default function Profile() {
 
       {/* Make the whole screen scrollable so edit mode never hides controls */}
       <ScrollView
+        style={styles.ScrollView}
         contentContainerStyle={styles.container}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
@@ -253,9 +276,18 @@ export default function Profile() {
 
           <View style={styles.statItem}>
             <Text style={styles.statNumber}>0</Text>
-            <Text style={styles.statLabel}>Upvotes</Text>
+            <Text style={styles.statLabel}>Following</Text>
+          </View>
+
+          <View style={styles.statDivider} />
+
+          <View style={styles.statItem}>
+            <Text style={styles.statNumber}>0</Text>
+            <Text style={styles.statLabel}>Followers</Text>
           </View>
         </View>
+
+        
 
         {/* Action */}
         {editing ? (
@@ -267,6 +299,24 @@ export default function Profile() {
             Edit Profile
           </Button>
         )}
+
+        {/* User's Messages */}
+        {messages.length > 0 && (
+          <View style={styles.messagesSection}>
+            <Text style={styles.sectionTitle}>My Echoes</Text>
+            {messages.map((msg) => (
+              <ImageCard
+                key={msg.id}
+                image={require('../../assets/mockImages/Pyramid.jpeg')}
+                username={name || user?.email}
+                likeCount={msg.upvote}
+              >
+                {msg.message}
+              </ImageCard>
+            ))}
+          </View>
+        )}
+
       </ScrollView>
     </Background>
   )
@@ -280,11 +330,15 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
 
+  ScrollView: {
+    width: '115%'
+  },
+
   card: {
     width: '100%',
     alignSelf: 'stretch',
     alignItems: 'center',
-    padding: 28,
+    padding: 40,
     borderRadius: 20,
     backgroundColor: '#fff',
     marginBottom: 18,
@@ -448,6 +502,18 @@ const styles = StyleSheet.create({
   backButtonText: {
     fontSize: 16,
     fontWeight: '600',
+  },
+
+  messagesSection: {
+    width: '100%',
+    marginTop: 10,
+  },
+
+  sectionTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    marginBottom: 8,
+    textAlign: 'center',
   },
 
   center: {

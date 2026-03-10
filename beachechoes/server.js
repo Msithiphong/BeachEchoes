@@ -119,6 +119,28 @@ app.post('/api/messages', requireFirebaseAuth, async (req, res) => {
   }
 })
 
+// GET messages by Neon user_id (current user)
+app.get('/api/messages/user/:userId', async (req, res) => {
+  try {
+    const userId = parseInt(req.params.userId, 10)
+    if (isNaN(userId)) {
+      return res.status(400).json({ success: false, error: 'Invalid user_id' })
+    }
+
+    const result = await sql`
+      SELECT id, user_id, message, COALESCE(upvote, 0)::int AS upvote, created_at
+      FROM messages
+      WHERE user_id = ${userId}
+      ORDER BY created_at DESC
+    `
+
+    res.json({ success: true, messages: result })
+  } catch (error) {
+    console.error('Fetch user messages error:', error)
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
 // Upload avatar to Firebase Storage
 app.post('/api/profile/:userId/avatar', requireFirebaseAuth, async (req, res) => {
   try {
