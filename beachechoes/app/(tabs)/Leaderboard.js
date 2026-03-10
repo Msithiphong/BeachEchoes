@@ -52,7 +52,7 @@ export default function Leaderboard() {
   // - BG_MAX_WIDTH: the forced width from Background.js
   // - leftOffset: how far the centered content is offset from left edge,
   //   plus a small padding tweak (+12) so spacing feels normal.
-  const BG_MAX_WIDTH = 340
+  const BG_MAX_WIDTH = 370
   const leftOffset = Math.max(0, (screenW - BG_MAX_WIDTH) / 2) + 16
 
   // ----------------------------
@@ -670,7 +670,7 @@ const styles = StyleSheet.create({
 
   /* ----- list ----- */
   sectionTitle: {
-    color: '#000',
+    color: '#000000',
     fontSize: 14,
     fontWeight: 'bold',
     marginBottom: 8,
@@ -682,7 +682,7 @@ const styles = StyleSheet.create({
   },
   itemCard: {
     borderRadius: 18,
-    backgroundColor: 'rgba(0,0,0,0.55)',
+    backgroundColor: 'rgb(255, 255, 255)',
     padding: 12,
   },
   itemRow: {

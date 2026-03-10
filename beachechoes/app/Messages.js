@@ -19,12 +19,12 @@
 
 import React, { useState, useContext } from 'react'
 import { StyleSheet, Text } from 'react-native'
-import Button from '../../components/Button'
-import Background from '../../components/Background'
-import TextInput from '../../components/TextInput'
-import { AuthContext } from '../../context/AuthContext'
-import { auth } from '../../config/firebase'
-import { API_URL } from '../../config/api'
+import Button from '../components/Button'
+import Background from '../components/Background'
+import TextInput from '../components/TextInput'
+import { AuthContext } from '../context/AuthContext'
+import { auth } from '../config/firebase'
+import { API_URL } from '../config/api'
 
 import { useRouter } from 'expo-router'
 

@@ -65,13 +65,14 @@ export default function StartScreen() {
         Dashboard
       </Button>
       
-      {/* Development: Test notification functionality */}
+      
+
       <Button
-        mode="outlined"
-        onPress={() => router.push('/ButtonTests')}
-      >
-        Notifications
-      </Button>
+        mode="contained"
+        onPress={() => router.push('/AdminDashboard')}
+        >
+          Admin Dashboard
+        </Button>
 
       
         
