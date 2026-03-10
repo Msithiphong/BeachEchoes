@@ -13,15 +13,17 @@
  * @component
  */
 
+import React, { useState } from 'react'
 import Button from '../../components/Button'
 import Header from '../../components/Header'
 import Background from '../../components/Background'
+import TextInput from '../../components/TextInput'
 import { useRouter } from 'expo-router'
 
 
 export default function Discover() {
-    // Navigation hook (for future use)
     const router = useRouter()
+    const [search, setSearch] = useState('')
     
     return(
         <>
@@ -29,7 +31,13 @@ export default function Discover() {
             <Header>
                 Discover
             </Header>
-            {/* TODO: Add content discovery features */}
+            <TextInput
+                label="Search"
+                returnKeyType="search"
+                value={search}
+                onChangeText={setSearch}
+                autoCapitalize="none"
+            />
         </Background>
         </>
     )
