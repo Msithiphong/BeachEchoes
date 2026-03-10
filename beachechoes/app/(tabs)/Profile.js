@@ -1,7 +1,8 @@
-import React, { useContext, useEffect, useState } from 'react'
+import React, { useContext, useEffect, useRef, useState } from 'react'
 import { View, Text, StyleSheet, Image, TextInput, Alert,
   TouchableOpacity, ActivityIndicator, Switch, ScrollView,
 } from 'react-native'
+import { useRouter } from 'expo-router'
 import * as ImagePicker from 'expo-image-picker'
 import Background from '../../components/Background'
 import Header from '../../components/Header'
@@ -17,6 +18,9 @@ import logo from '../../assets/images/logo.png'
 
 export default function Profile() {
   const { user } = useContext(AuthContext)
+  const router = useRouter()
+  const scrollRef = useRef(null)
+  const echoesYRef = useRef(0)
 
   const [name, setName] = useState(user?.name || '')
   const [bio, setBio] = useState('')
@@ -26,6 +30,10 @@ export default function Profile() {
 
   const [neonUserId, setNeonUserId] = useState(null)
   const [messages, setMessages] = useState([])
+
+  const [echoesCount, setEchoesCount] = useState(0)
+  const [followingCount, setFollowingCount] = useState(0)
+  const [followersCount, setFollowersCount] = useState(0)
 
   const [editing, setEditing] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -46,6 +54,10 @@ export default function Profile() {
         setName(data.profile.name ?? '')
         setBio(data.profile.bio ?? '')
         setAvatarUrl(data.profile.avatar_url ?? data.profile.avatarUrl ?? null)
+
+        setEchoesCount(data.profile.echoes_count ?? 0)
+        setFollowingCount(data.profile.following_count ?? 0)
+        setFollowersCount(data.profile.followers_count ?? 0)
 
         const pref =
           data.profile.anonymous_echoes ??
@@ -177,6 +189,7 @@ export default function Profile() {
 
       {/* Make the whole screen scrollable so edit mode never hides controls */}
       <ScrollView
+        ref={scrollRef}
         style={styles.ScrollView}
         contentContainerStyle={styles.container}
         keyboardShouldPersistTaps="handled"
@@ -267,24 +280,24 @@ export default function Profile() {
 
         {/* Stats (FORCED same width as card) */}
         <View style={styles.statsCard}>
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>0</Text>
+          <TouchableOpacity style={styles.statItem} onPress={() => scrollRef.current?.scrollTo({ y: echoesYRef.current, animated: true })}>
+            <Text style={styles.statNumber}>{echoesCount}</Text>
             <Text style={styles.statLabel}>Echoes</Text>
-          </View>
+          </TouchableOpacity>
 
           <View style={styles.statDivider} />
 
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>0</Text>
+          <TouchableOpacity style={styles.statItem} onPress={() => router.push(`/profile/connections?userId=${user.uid}&type=following&name=${encodeURIComponent(name)}`)}>
+            <Text style={styles.statNumber}>{followingCount}</Text>
             <Text style={styles.statLabel}>Following</Text>
-          </View>
+          </TouchableOpacity>
 
           <View style={styles.statDivider} />
 
-          <View style={styles.statItem}>
-            <Text style={styles.statNumber}>0</Text>
+          <TouchableOpacity style={styles.statItem} onPress={() => router.push(`/profile/connections?userId=${user.uid}&type=followers&name=${encodeURIComponent(name)}`)}>
+            <Text style={styles.statNumber}>{followersCount}</Text>
             <Text style={styles.statLabel}>Followers</Text>
-          </View>
+          </TouchableOpacity>
         </View>
 
         
@@ -301,10 +314,10 @@ export default function Profile() {
         )}
 
         {/* User's Messages */}
-        {messages.length > 0 && (
-          <View style={styles.messagesSection}>
-            <Text style={styles.sectionTitle}>My Echoes</Text>
-            {messages.map((msg) => (
+        <View style={styles.messagesSection} onLayout={(e) => { echoesYRef.current = e.nativeEvent.layout.y }}>
+          <Text style={styles.sectionTitle}>My Echoes</Text>
+          {messages.length > 0 ? (
+            messages.map((msg) => (
               <ImageCard
                 key={msg.id}
                 image={require('../../assets/mockImages/Pyramid.jpeg')}
@@ -313,9 +326,13 @@ export default function Profile() {
               >
                 {msg.message}
               </ImageCard>
-            ))}
-          </View>
-        )}
+            ))
+          ) : (
+            <View style={styles.emptyEchoCard}>
+              <Text style={styles.emptyEchoText}>No Echoes Created</Text>
+            </View>
+          )}
+        </View>
 
       </ScrollView>
     </Background>
@@ -519,6 +536,21 @@ const styles = StyleSheet.create({
   center: {
     textAlign: 'center',
     marginTop: 24,
+  },
+
+  emptyEchoCard: {
+    width: '100%',
+    backgroundColor: '#d1d1d1',
+    borderRadius: 16,
+    paddingVertical: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  emptyEchoText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#666',
   },
 })
 

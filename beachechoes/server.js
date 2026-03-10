@@ -75,6 +75,33 @@ app.post('/api/users/sync', requireFirebaseAuth, async (req, res) => {
   }
 })
 
+// Search users by name prefix (for autocomplete)
+app.get('/api/users/search', async (req, res) => {
+  try {
+    const q = (req.query.q || '').trim()
+
+    if (!q) {
+      return res.json({ success: true, users: [] })
+    }
+
+    // ILIKE = case-insensitive prefix search in PostgreSQL.
+    // The pattern is parameterized via tagged template, so it's injection-safe.
+    const pattern = `${q}%`
+    const result = await sql`
+      SELECT firebase_uid, name, avatar_url
+      FROM users
+      WHERE name ILIKE ${pattern}
+      ORDER BY name
+      LIMIT 10
+    `
+
+    res.json({ success: true, users: result })
+  } catch (error) {
+    console.error('User search error:', error)
+    res.status(500).json({ success: false, error: 'Internal server error' })
+  }
+})
+
 app.post('/api/messages', requireFirebaseAuth, async (req, res) => {
   try {
     const { uid } = req.firebase
@@ -190,7 +217,7 @@ app.post('/api/profile/:userId/avatar', requireFirebaseAuth, async (req, res) =>
   }
 })
 
-// GET user profile
+// GET user profile (includes echoes, following, followers counts)
 app.get('/api/profile/:userId', async (req, res) => {
   try {
     const { userId } = req.params // This is firebase_uid
@@ -205,7 +232,31 @@ app.get('/api/profile/:userId', async (req, res) => {
       return res.json({ success: false, error: 'Profile not found' })
     }
 
-    res.json({ success: true, profile: result[0] })
+    const profile = result[0]
+    const neonId = profile.id
+
+    // Echoes = total messages by this user
+    const echoesResult = await sql`
+      SELECT COUNT(*)::int AS count FROM messages WHERE user_id = ${neonId}
+    `
+
+    // Following = accepted requests this user sent (user_id = me)
+    const followingResult = await sql`
+      SELECT COUNT(*)::int AS count FROM friendships
+      WHERE user_id = ${neonId} AND status = 'accepted'
+    `
+
+    // Followers = accepted requests sent TO this user (friend_id = me)
+    const followersResult = await sql`
+      SELECT COUNT(*)::int AS count FROM friendships
+      WHERE friend_id = ${neonId} AND status = 'accepted'
+    `
+
+    profile.echoes_count = echoesResult[0]?.count ?? 0
+    profile.following_count = followingResult[0]?.count ?? 0
+    profile.followers_count = followersResult[0]?.count ?? 0
+
+    res.json({ success: true, profile })
   } catch (error) {
     res.json({ success: false, error: error.message })
   }
@@ -233,6 +284,191 @@ app.put('/api/profile/:userId', requireFirebaseAuth, async (req, res) => {
     res.json({ success: true, profile: result[0] })
   } catch (error) {
     res.json({ success: false, error: error.message })
+  }
+})
+
+// -------------------- LEADERBOARD (MESSAGES + UPVOTES ONLY) --------------------
+
+// -------------------- FRIENDSHIPS --------------------
+
+// Helper: resolve firebase_uid → neon user_id
+async function resolveUserId(firebaseUid) {
+  const rows = await sql`SELECT user_id FROM users WHERE firebase_uid = ${firebaseUid}`
+  return rows.length ? rows[0].user_id : null
+}
+
+// GET friendship status between the authed user and another user
+app.get('/api/friendships/status/:friendUid', requireFirebaseAuth, async (req, res) => {
+  try {
+    const myId = await resolveUserId(req.firebase.uid)
+    const friendId = await resolveUserId(req.params.friendUid)
+
+    if (!myId || !friendId) {
+      return res.json({ success: true, status: null })
+    }
+
+    // Check both directions (I sent, or they sent)
+    const rows = await sql`
+      SELECT user_id, friend_id, status
+      FROM friendships
+      WHERE (user_id = ${myId} AND friend_id = ${friendId})
+         OR (user_id = ${friendId} AND friend_id = ${myId})
+      LIMIT 1
+    `
+
+    if (!rows.length) {
+      return res.json({ success: true, status: null })
+    }
+
+    const row = rows[0]
+    // Determine who initiated: if I sent it, direction = 'outgoing'
+    const direction = row.user_id === myId ? 'outgoing' : 'incoming'
+
+    res.json({ success: true, status: row.status, direction })
+  } catch (error) {
+    console.error('Friendship status error:', error)
+    res.status(500).json({ success: false, error: 'Internal server error' })
+  }
+})
+
+// POST follow (send a friend/follow request)
+app.post('/api/friendships/follow', requireFirebaseAuth, async (req, res) => {
+  try {
+    const { friendUid } = req.body
+    if (!friendUid) {
+      return res.status(400).json({ success: false, error: 'friendUid is required' })
+    }
+
+    const myId = await resolveUserId(req.firebase.uid)
+    const friendId = await resolveUserId(friendUid)
+
+    if (!myId || !friendId) {
+      return res.status(404).json({ success: false, error: 'User not found' })
+    }
+    if (myId === friendId) {
+      return res.status(400).json({ success: false, error: 'Cannot follow yourself' })
+    }
+
+    // Insert pending friendship (ignore if already exists)
+    await sql`
+      INSERT INTO friendships (user_id, friend_id, status)
+      VALUES (${myId}, ${friendId}, 'pending')
+      ON CONFLICT (user_id, friend_id) DO NOTHING
+    `
+
+    res.json({ success: true, status: 'pending' })
+  } catch (error) {
+    console.error('Follow error:', error)
+    res.status(500).json({ success: false, error: 'Internal server error' })
+  }
+})
+
+// DELETE unfollow (remove the friendship row)
+app.delete('/api/friendships/unfollow', requireFirebaseAuth, async (req, res) => {
+  try {
+    const { friendUid } = req.body
+    if (!friendUid) {
+      return res.status(400).json({ success: false, error: 'friendUid is required' })
+    }
+
+    const myId = await resolveUserId(req.firebase.uid)
+    const friendId = await resolveUserId(friendUid)
+
+    if (!myId || !friendId) {
+      return res.status(404).json({ success: false, error: 'User not found' })
+    }
+
+    // Remove friendship in both directions
+    await sql`
+      DELETE FROM friendships
+      WHERE (user_id = ${myId} AND friend_id = ${friendId})
+         OR (user_id = ${friendId} AND friend_id = ${myId})
+    `
+
+    res.json({ success: true })
+  } catch (error) {
+    console.error('Unfollow error:', error)
+    res.status(500).json({ success: false, error: 'Internal server error' })
+  }
+})
+
+// PUT accept a pending incoming request
+app.put('/api/friendships/accept', requireFirebaseAuth, async (req, res) => {
+  try {
+    const { friendUid } = req.body
+    if (!friendUid) {
+      return res.status(400).json({ success: false, error: 'friendUid is required' })
+    }
+
+    const myId = await resolveUserId(req.firebase.uid)
+    const friendId = await resolveUserId(friendUid)
+
+    if (!myId || !friendId) {
+      return res.status(404).json({ success: false, error: 'User not found' })
+    }
+
+    // Only accept requests that were sent TO me (friend_id = myId)
+    const result = await sql`
+      UPDATE friendships
+      SET status = 'accepted'
+      WHERE user_id = ${friendId} AND friend_id = ${myId} AND status = 'pending'
+      RETURNING *
+    `
+
+    if (!result.length) {
+      return res.status(404).json({ success: false, error: 'No pending request found' })
+    }
+
+    res.json({ success: true, status: 'accepted' })
+  } catch (error) {
+    console.error('Accept friendship error:', error)
+    res.status(500).json({ success: false, error: 'Internal server error' })
+  }
+})
+
+// ------------------ END FRIENDSHIPS ------------------
+
+// -------------------- FOLLOWERS / FOLLOWING LISTS --------------------
+
+// GET /api/friendships/following/:firebaseUid  — users this person follows
+app.get('/api/friendships/following/:firebaseUid', async (req, res) => {
+  try {
+    const uid = req.params.firebaseUid
+    const meId = await resolveUserId(uid)
+    if (!meId) return res.json({ success: true, users: [] })
+
+    const rows = await sql`
+      SELECT u.firebase_uid, u.name, u.avatar_url
+      FROM friendships f
+      JOIN users u ON u.user_id = f.friend_id
+      WHERE f.user_id = ${meId} AND f.status = 'accepted'
+      ORDER BY u.name ASC
+    `
+    res.json({ success: true, users: rows })
+  } catch (err) {
+    console.error('Following list error:', err)
+    res.status(500).json({ success: false, error: 'Internal server error' })
+  }
+})
+
+// GET /api/friendships/followers/:firebaseUid  — users who follow this person
+app.get('/api/friendships/followers/:firebaseUid', async (req, res) => {
+  try {
+    const uid = req.params.firebaseUid
+    const meId = await resolveUserId(uid)
+    if (!meId) return res.json({ success: true, users: [] })
+
+    const rows = await sql`
+      SELECT u.firebase_uid, u.name, u.avatar_url
+      FROM friendships f
+      JOIN users u ON u.user_id = f.user_id
+      WHERE f.friend_id = ${meId} AND f.status = 'accepted'
+      ORDER BY u.name ASC
+    `
+    res.json({ success: true, users: rows })
+  } catch (err) {
+    console.error('Followers list error:', err)
+    res.status(500).json({ success: false, error: 'Internal server error' })
   }
 })
 
