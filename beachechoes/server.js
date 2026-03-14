@@ -428,6 +428,25 @@ app.put('/api/friendships/accept', requireFirebaseAuth, async (req, res) => {
 
 // ------------------ END FRIENDSHIPS ------------------
 
+// GET /api/friendships/pending — incoming pending friend requests for the authed user
+app.get('/api/friendships/pending', requireFirebaseAuth, async (req, res) => {
+  try {
+    const myId = await resolveUserId(req.firebase.uid)
+    if (!myId) return res.json({ success: true, requests: [] })
+
+    const rows = await sql`
+      SELECT u.firebase_uid, u.name, u.avatar_url
+      FROM friendships f
+      JOIN users u ON u.user_id = f.user_id
+      WHERE f.friend_id = ${myId} AND f.status = 'pending'
+    `
+    res.json({ success: true, requests: rows })
+  } catch (err) {
+    console.error('Pending requests error:', err)
+    res.status(500).json({ success: false, error: 'Internal server error' })
+  }
+})
+
 // -------------------- FOLLOWERS / FOLLOWING LISTS --------------------
 
 // GET /api/friendships/following/:firebaseUid  — users this person follows

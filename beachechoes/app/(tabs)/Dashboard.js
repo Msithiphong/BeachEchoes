@@ -16,7 +16,7 @@
  */
 
 import React, { useContext, useEffect } from 'react'
-import { View, ScrollView, StyleSheet, ActivityIndicator } from 'react-native'
+import { View, Animated, StyleSheet, ActivityIndicator } from 'react-native'
 import { useRouter } from 'expo-router'
 import Background from '../../components/Background'
 import Logo from '../../components/Logo'
@@ -24,13 +24,15 @@ import Header from '../../components/Header'
 import Paragraph from '../../components/Paragraph'
 import ImageCard from '../../components/ImageCard'
 import { AuthContext } from '../../context/AuthContext'
+import { ScrollContext } from '../../context/ScrollContext'
 
 export default function Dashboard() {
   // Navigation hook
   const router = useRouter()
   
-  // Access user state from context
+  // Access user state and scroll handler from context
   const { user, loading } = useContext(AuthContext)
+  const { scrollHandler, navbarHeight } = useContext(ScrollContext)
 
   /**
    * Authentication Guard Effect
@@ -65,11 +67,13 @@ export default function Dashboard() {
   return (
     <View style={styles.container}>
       <Background>
-        <ScrollView
+        <Animated.ScrollView
           style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[styles.scrollContent, { paddingTop: navbarHeight }]}
           showsVerticalScrollIndicator={false}
           horizontal={false}
+          scrollEventThrottle={1}
+          onScroll={scrollHandler}
         >
             {/* App logo */}
             <Logo />
@@ -161,7 +165,7 @@ export default function Dashboard() {
             </Paragraph>
             */}
 
-        </ScrollView>
+        </Animated.ScrollView>
       </Background>
     </View>
   )
