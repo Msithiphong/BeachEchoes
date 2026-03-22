@@ -17,6 +17,7 @@
 import { initializeApp } from 'firebase/app'
 import { initializeAuth, getReactNativePersistence } from 'firebase/auth'
 import { getStorage } from 'firebase/storage'
+import { getFirestore } from 'firebase/firestore'
 import ReactNativeAsyncStorage from '@react-native-async-storage/async-storage'
 
 /**
@@ -54,3 +55,12 @@ export const auth = initializeAuth(app, {
  * @constant {FirebaseStorage}
  */
 export const storage = getStorage(app)
+
+/**
+ * Firestore instance for ephemeral/auxiliary data only.
+ * Do NOT store canonical echo placement records here — use Neon.
+ * Used for: AR session presence, short-lived status, feature flags.
+ *
+ * @constant {Firestore}
+ */
+export const db = getFirestore(app)
