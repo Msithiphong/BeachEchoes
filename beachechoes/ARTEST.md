@@ -79,5 +79,3 @@ npx expo start
 - Test on both iOS and Android if possible.
 
 ---
-
-**For any issues, check the Mistake Log in `claude.md` and backend logs for troubleshooting.**
