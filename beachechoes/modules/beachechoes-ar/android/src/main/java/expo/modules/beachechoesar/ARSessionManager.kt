@@ -7,7 +7,13 @@ import com.google.ar.core.Config
 import com.google.ar.core.Frame
 import com.google.ar.core.Session
 import com.google.ar.core.TrackingState
+import com.google.ar.core.exceptions.CameraNotAvailableException
+import com.google.ar.core.exceptions.UnavailableApkTooOldException
+import com.google.ar.core.exceptions.UnavailableArcoreNotInstalledException
+import com.google.ar.core.exceptions.UnavailableDeviceNotCompatibleException
+import com.google.ar.core.exceptions.UnavailableSdkTooOldException
 import com.google.ar.core.exceptions.UnavailableException
+import com.google.ar.core.exceptions.UnavailableUserDeclinedInstallationException
 
 /**
  * Manages the ARCore session lifecycle and reports tracking/plane/tag state changes.
@@ -32,6 +38,13 @@ class ARSessionManager {
    */
   fun start(activity: Activity, zoneId: String, eventEmitter: (String, Map<String, Any>) -> Unit): Map<String, Any> {
     val availability = ArCoreApk.getInstance().checkAvailability(activity)
+    if (availability.isTransient) {
+      return mapOf(
+        "success" to false,
+        "message" to "ARCore availability is still being checked. Try again in a moment."
+      )
+    }
+
     if (!availability.isSupported) {
       return mapOf("success" to false, "message" to "ARCore is not supported on this device")
     }
@@ -65,6 +78,20 @@ class ARSessionManager {
       ))
 
       mapOf("success" to true, "message" to "AR session started")
+    } catch (e: SecurityException) {
+      mapOf("success" to false, "message" to "Camera permission is required before starting AR")
+    } catch (e: UnavailableArcoreNotInstalledException) {
+      mapOf("success" to false, "message" to "Google Play Services for AR is not installed on this device")
+    } catch (e: UnavailableApkTooOldException) {
+      mapOf("success" to false, "message" to "Google Play Services for AR needs to be updated")
+    } catch (e: UnavailableSdkTooOldException) {
+      mapOf("success" to false, "message" to "This app's ARCore integration is out of date for this device")
+    } catch (e: UnavailableDeviceNotCompatibleException) {
+      mapOf("success" to false, "message" to "ARCore is not supported on this device")
+    } catch (e: UnavailableUserDeclinedInstallationException) {
+      mapOf("success" to false, "message" to "ARCore installation was declined")
+    } catch (e: CameraNotAvailableException) {
+      mapOf("success" to false, "message" to "The camera is unavailable for AR startup right now")
     } catch (e: UnavailableException) {
       mapOf("success" to false, "message" to "ARCore unavailable: ${e.message}")
     } catch (e: Exception) {
