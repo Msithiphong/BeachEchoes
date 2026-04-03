@@ -662,6 +662,150 @@ app.get("/api/leaderboard", async (req, res) => {
 
 // ------------------ END LEADERBOARD ------------------
 
+// ==================== AR ZONES & ECHOES ====================
+
+// GET /api/zones — list all zones
+app.get('/api/zones', async (req, res) => {
+  try {
+    const zones = await sql`
+      SELECT z.id, z.name, z.campus_area, z.created_at,
+             COALESCE(json_agg(
+               json_build_object('tag_id', zt.tag_id, 'tag_size_meters', zt.tag_size_meters, 'description', zt.description)
+             ) FILTER (WHERE zt.tag_id IS NOT NULL), '[]') AS apriltags
+      FROM zones z
+      LEFT JOIN zone_apriltags zt ON zt.zone_id = z.id
+      GROUP BY z.id
+      ORDER BY z.name
+    `
+    res.json({ success: true, zones })
+  } catch (error) {
+    console.error('GET /api/zones error:', error)
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+// GET /api/zones/by-tag/:tagId — look up a zone by its AprilTag ID
+app.get('/api/zones/by-tag/:tagId', async (req, res) => {
+  try {
+    const tagId = parseInt(req.params.tagId, 10)
+    if (isNaN(tagId)) {
+      return res.status(400).json({ success: false, error: 'Invalid tag ID' })
+    }
+
+    const result = await sql`
+      SELECT z.id, z.name, z.campus_area, zt.tag_id, zt.tag_size_meters
+      FROM zone_apriltags zt
+      JOIN zones z ON z.id = zt.zone_id
+      WHERE zt.tag_id = ${tagId}
+      LIMIT 1
+    `
+
+    if (result.length === 0) {
+      return res.status(404).json({ success: false, error: 'Tag not found' })
+    }
+
+    res.json({ success: true, zone: result[0] })
+  } catch (error) {
+    console.error('GET /api/zones/by-tag error:', error)
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+// POST /api/ar-echoes — create a new AR echo (auth required)
+app.post('/api/ar-echoes', requireFirebaseAuth, async (req, res) => {
+  try {
+    const { uid } = req.firebase
+    const { zone_id, apriltag_id, text, local_x, local_y, local_z, rotation_y } = req.body
+
+    if (!zone_id || apriltag_id == null || !text) {
+      return res.status(400).json({ success: false, error: 'Missing required fields: zone_id, apriltag_id, text' })
+    }
+
+    // Look up the Neon user_id from firebase_uid
+    const userResult = await sql`
+      SELECT user_id FROM users WHERE firebase_uid = ${uid}
+    `
+    if (userResult.length === 0) {
+      return res.status(404).json({ success: false, error: 'User not found' })
+    }
+    const authorUserId = userResult[0].user_id
+
+    const result = await sql`
+      INSERT INTO ar_echoes (zone_id, apriltag_id, author_user_id, text, local_x, local_y, local_z, rotation_y)
+      VALUES (${zone_id}, ${apriltag_id}, ${authorUserId}, ${text},
+              ${local_x || 0}, ${local_y || 0}, ${local_z || 0}, ${rotation_y || 0})
+      RETURNING id, zone_id, apriltag_id, author_user_id, text, local_x, local_y, local_z, rotation_y, status, created_at
+    `
+
+    res.json({ success: true, echo: result[0] })
+  } catch (error) {
+    console.error('POST /api/ar-echoes error:', error)
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+// GET /api/ar-echoes/by-tag/:tagId — fetch all active echoes for a given tag
+app.get('/api/ar-echoes/by-tag/:tagId', async (req, res) => {
+  try {
+    const tagId = parseInt(req.params.tagId, 10)
+    if (isNaN(tagId)) {
+      return res.status(400).json({ success: false, error: 'Invalid tag ID' })
+    }
+
+    const echoes = await sql`
+      SELECT e.id, e.zone_id, e.apriltag_id, e.text,
+             e.local_x, e.local_y, e.local_z, e.rotation_y,
+             e.status, e.created_at,
+             u.name AS author_name, u.avatar_url AS author_avatar
+      FROM ar_echoes e
+      JOIN users u ON u.user_id = e.author_user_id
+      WHERE e.apriltag_id = ${tagId}
+        AND e.status = 'active'
+        AND (e.expires_at IS NULL OR e.expires_at > now())
+      ORDER BY e.created_at DESC
+    `
+
+    res.json({ success: true, echoes })
+  } catch (error) {
+    console.error('GET /api/ar-echoes/by-tag error:', error)
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+// DELETE /api/ar-echoes/:echoId — soft-delete an echo (auth required, author only)
+app.delete('/api/ar-echoes/:echoId', requireFirebaseAuth, async (req, res) => {
+  try {
+    const { uid } = req.firebase
+    const { echoId } = req.params
+
+    // Verify author ownership
+    const userResult = await sql`
+      SELECT user_id FROM users WHERE firebase_uid = ${uid}
+    `
+    if (userResult.length === 0) {
+      return res.status(404).json({ success: false, error: 'User not found' })
+    }
+
+    const result = await sql`
+      UPDATE ar_echoes
+      SET status = 'deleted'
+      WHERE id = ${echoId} AND author_user_id = ${userResult[0].user_id}
+      RETURNING id
+    `
+
+    if (result.length === 0) {
+      return res.status(404).json({ success: false, error: 'Echo not found or not authorized' })
+    }
+
+    res.json({ success: true, deleted: echoId })
+  } catch (error) {
+    console.error('DELETE /api/ar-echoes error:', error)
+    res.status(500).json({ success: false, error: error.message })
+  }
+})
+
+// ================== END AR ZONES & ECHOES ==================
+
 //app.listen(3000, '0.0.0.0', () => {
 //  console.log("Server running on http://0.0.0.0:3000");
 //});
