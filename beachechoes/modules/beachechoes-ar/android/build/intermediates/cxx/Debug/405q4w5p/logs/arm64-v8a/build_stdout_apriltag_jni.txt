@@ -1,0 +1,28 @@
+ninja: Entering directory `C:\Users\codep\OneDrive\Documents\GitHub\BeachEchoes\beachechoes\modules\beachechoes-ar\android\.cxx\Debug\405q4w5p\arm64-v8a'
+[1/27] Building C object CMakeFiles/apriltag_jni.dir/1d7dc00d263550d04ce5bc7602c80ff1/modules/beachechoes-ar/vendor/apriltag/common/g2d.c.o
+[2/27] Building C object CMakeFiles/apriltag_jni.dir/1d7dc00d263550d04ce5bc7602c80ff1/modules/beachechoes-ar/vendor/apriltag/common/getopt.c.o
+[3/27] Building C object CMakeFiles/apriltag_jni.dir/1d7dc00d263550d04ce5bc7602c80ff1/modules/beachechoes-ar/vendor/apriltag/common/image_u8.c.o
+[4/27] Building C object CMakeFiles/apriltag_jni.dir/854e3828937719543edf5504d2586e90/beachechoes-ar/vendor/apriltag/common/image_u8_parallel.c.o
+[5/27] Building C object CMakeFiles/apriltag_jni.dir/1d7dc00d263550d04ce5bc7602c80ff1/modules/beachechoes-ar/vendor/apriltag/common/homography.c.o
+[6/27] Building C object CMakeFiles/apriltag_jni.dir/1d7dc00d263550d04ce5bc7602c80ff1/modules/beachechoes-ar/vendor/apriltag/common/image_u8x4.c.o
+[7/27] Building C object CMakeFiles/apriltag_jni.dir/1d7dc00d263550d04ce5bc7602c80ff1/modules/beachechoes-ar/vendor/apriltag/common/image_u8x3.c.o
+[8/27] Building C object CMakeFiles/apriltag_jni.dir/1d7dc00d263550d04ce5bc7602c80ff1/modules/beachechoes-ar/vendor/apriltag/common/pjpeg.c.o
+[9/27] Building C object CMakeFiles/apriltag_jni.dir/1d7dc00d263550d04ce5bc7602c80ff1/modules/beachechoes-ar/vendor/apriltag/common/pjpeg-idct.c.o
+[10/27] Building C object CMakeFiles/apriltag_jni.dir/1d7dc00d263550d04ce5bc7602c80ff1/modules/beachechoes-ar/vendor/apriltag/common/pam.c.o
+[11/27] Building C object CMakeFiles/apriltag_jni.dir/1d7dc00d263550d04ce5bc7602c80ff1/modules/beachechoes-ar/vendor/apriltag/common/pnm.c.o
+[12/27] Building C object CMakeFiles/apriltag_jni.dir/1d7dc00d263550d04ce5bc7602c80ff1/modules/beachechoes-ar/vendor/apriltag/common/unionfind.c.o
+[13/27] Building C object CMakeFiles/apriltag_jni.dir/1d7dc00d263550d04ce5bc7602c80ff1/modules/beachechoes-ar/vendor/apriltag/common/string_util.c.o
+[14/27] Building C object CMakeFiles/apriltag_jni.dir/1d7dc00d263550d04ce5bc7602c80ff1/modules/beachechoes-ar/vendor/apriltag/common/svd22.c.o
+[15/27] Building C object CMakeFiles/apriltag_jni.dir/854e3828937719543edf5504d2586e90/beachechoes-ar/vendor/apriltag/common/pthreads_cross.c.o
+[16/27] Building C object CMakeFiles/apriltag_jni.dir/1d7dc00d263550d04ce5bc7602c80ff1/modules/beachechoes-ar/vendor/apriltag/common/matd.c.o
+[17/27] Building C object CMakeFiles/apriltag_jni.dir/1d7dc00d263550d04ce5bc7602c80ff1/modules/beachechoes-ar/vendor/apriltag/tag36h11.c.o
+[18/27] Building C object CMakeFiles/apriltag_jni.dir/1d7dc00d263550d04ce5bc7602c80ff1/modules/beachechoes-ar/vendor/apriltag/common/time_util.c.o
+[19/27] Building CXX object CMakeFiles/apriltag_jni.dir/apriltag_jni.cpp.o
+[20/27] Building C object CMakeFiles/apriltag_jni.dir/1d7dc00d263550d04ce5bc7602c80ff1/modules/beachechoes-ar/vendor/apriltag/common/zarray.c.o
+[21/27] Building C object CMakeFiles/apriltag_jni.dir/1d7dc00d263550d04ce5bc7602c80ff1/modules/beachechoes-ar/vendor/apriltag/apriltag_pose.c.o
+[22/27] Building C object CMakeFiles/apriltag_jni.dir/1d7dc00d263550d04ce5bc7602c80ff1/modules/beachechoes-ar/vendor/apriltag/common/workerpool.c.o
+[23/27] Building C object CMakeFiles/apriltag_jni.dir/1d7dc00d263550d04ce5bc7602c80ff1/modules/beachechoes-ar/vendor/apriltag/common/zmaxheap.c.o
+[24/27] Building C object CMakeFiles/apriltag_jni.dir/1d7dc00d263550d04ce5bc7602c80ff1/modules/beachechoes-ar/vendor/apriltag/common/zhash.c.o
+[25/27] Building C object CMakeFiles/apriltag_jni.dir/1d7dc00d263550d04ce5bc7602c80ff1/modules/beachechoes-ar/vendor/apriltag/apriltag.c.o
+[26/27] Building C object CMakeFiles/apriltag_jni.dir/854e3828937719543edf5504d2586e90/beachechoes-ar/vendor/apriltag/apriltag_quad_thresh.c.o
+[27/27] Linking CXX shared library C:\Users\codep\OneDrive\Documents\GitHub\BeachEchoes\beachechoes\modules\beachechoes-ar\android\build\intermediates\cxx\Debug\405q4w5p\obj\arm64-v8a\libapriltag_jni.so

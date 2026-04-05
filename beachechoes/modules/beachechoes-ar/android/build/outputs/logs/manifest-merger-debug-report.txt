@@ -1,0 +1,16 @@
+-- Merging decision tree log ---
+manifest
+ADDED from C:\Users\codep\OneDrive\Documents\GitHub\BeachEchoes\beachechoes\modules\beachechoes-ar\android\build\intermediates\tmp\ProcessLibraryManifest\debug\tempAndroidManifest11987154645153106388.xml:2:13-83
+INJECTED from C:\Users\codep\OneDrive\Documents\GitHub\BeachEchoes\beachechoes\modules\beachechoes-ar\android\build\intermediates\tmp\ProcessLibraryManifest\debug\tempAndroidManifest11987154645153106388.xml:2:13-83
+	package
+		INJECTED from C:\Users\codep\OneDrive\Documents\GitHub\BeachEchoes\beachechoes\modules\beachechoes-ar\android\build\intermediates\tmp\ProcessLibraryManifest\debug\tempAndroidManifest11987154645153106388.xml
+	xmlns:android
+		ADDED from C:\Users\codep\OneDrive\Documents\GitHub\BeachEchoes\beachechoes\modules\beachechoes-ar\android\build\intermediates\tmp\ProcessLibraryManifest\debug\tempAndroidManifest11987154645153106388.xml:2:23-81
+uses-sdk
+INJECTED from C:\Users\codep\OneDrive\Documents\GitHub\BeachEchoes\beachechoes\modules\beachechoes-ar\android\build\intermediates\tmp\ProcessLibraryManifest\debug\tempAndroidManifest11987154645153106388.xml reason: use-sdk injection requested
+INJECTED from C:\Users\codep\OneDrive\Documents\GitHub\BeachEchoes\beachechoes\modules\beachechoes-ar\android\build\intermediates\tmp\ProcessLibraryManifest\debug\tempAndroidManifest11987154645153106388.xml
+INJECTED from C:\Users\codep\OneDrive\Documents\GitHub\BeachEchoes\beachechoes\modules\beachechoes-ar\android\build\intermediates\tmp\ProcessLibraryManifest\debug\tempAndroidManifest11987154645153106388.xml
+	android:targetSdkVersion
+		INJECTED from C:\Users\codep\OneDrive\Documents\GitHub\BeachEchoes\beachechoes\modules\beachechoes-ar\android\build\intermediates\tmp\ProcessLibraryManifest\debug\tempAndroidManifest11987154645153106388.xml
+	android:minSdkVersion
+		INJECTED from C:\Users\codep\OneDrive\Documents\GitHub\BeachEchoes\beachechoes\modules\beachechoes-ar\android\build\intermediates\tmp\ProcessLibraryManifest\debug\tempAndroidManifest11987154645153106388.xml

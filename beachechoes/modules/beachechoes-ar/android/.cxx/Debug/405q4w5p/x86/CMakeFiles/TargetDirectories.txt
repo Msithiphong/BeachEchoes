@@ -1,0 +1,3 @@
+C:/Users/codep/OneDrive/Documents/GitHub/BeachEchoes/beachechoes/modules/beachechoes-ar/android/.cxx/Debug/405q4w5p/x86/CMakeFiles/apriltag_jni.dir
+C:/Users/codep/OneDrive/Documents/GitHub/BeachEchoes/beachechoes/modules/beachechoes-ar/android/.cxx/Debug/405q4w5p/x86/CMakeFiles/edit_cache.dir
+C:/Users/codep/OneDrive/Documents/GitHub/BeachEchoes/beachechoes/modules/beachechoes-ar/android/.cxx/Debug/405q4w5p/x86/CMakeFiles/rebuild_cache.dir
