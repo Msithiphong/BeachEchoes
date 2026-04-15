@@ -2,6 +2,14 @@ import express from 'express'
 import { neon } from '@neondatabase/serverless'
 import cors from 'cors'
 import dotenv from 'dotenv'
+<<<<<<< Updated upstream
+=======
+import admin from 'firebase-admin'
+import { createRequire } from 'module'
+
+const require = createRequire(import.meta.url)
+const leoProfanity = require('leo-profanity')
+>>>>>>> Stashed changes
 
 dotenv.config()
 
@@ -11,7 +19,49 @@ app.use(express.json())
 
 const sql = neon(process.env.DATABASE_URL)
 
+<<<<<<< Updated upstream
 app.post('/api/login', async (req, res) => {
+=======
+// Init Firebase Admin & Bucket
+var serviceAccount = require("./serviceAccountKey.json");
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+  storageBucket: process.env.FIREBASE_STORAGE_BUCKET
+});
+
+const bucket = admin.storage().bucket()
+
+// -------------------- MESSAGE MODERATION --------------------
+
+// Add any extra custom blocked words here.
+const CUSTOM_BLOCKED_WORDS = [
+  'hell',
+  'exampleword'
+]
+
+// Add custom blocked words into leo-profanity's internal dictionary.
+leoProfanity.add(CUSTOM_BLOCKED_WORDS)
+
+function sanitizeMessage(text) {
+  let cleaned = leoProfanity.clean(text)
+
+  cleaned = cleaned.replace(/\*+/g, '******')
+
+  return cleaned
+}
+
+// ------------------ END MESSAGE MODERATION ------------------
+
+// Auth middleware helpers
+function getBearerToken(req) {
+  const header = req.headers.authorization || ''
+  const match = header.match(/^Bearer (.+)$/)
+  return match ? match[1] : null
+}
+
+async function requireFirebaseAuth(req, res, next) {
+>>>>>>> Stashed changes
   try {
     const { email, password } = req.body
     const users = await sql`SELECT user_id AS id, name, email, password_hash, created_at FROM users WHERE email = ${email}`
@@ -67,11 +117,22 @@ app.post('/api/messages', async (req, res) => {
     if (!message || !message.trim()) {
       return res.json({ success: false, error: 'Message is required' })
     }
+
+    const cleanedMessage = sanitizeMessage(message.trim())
+
+    console.log('Original:', message)
+    console.log('Cleaned:', cleanedMessage)
     
     const result = await sql`
+<<<<<<< Updated upstream
       INSERT INTO messages (message, created_at)
       VALUES (${message}, NOW())
       RETURNING id, message, created_at
+=======
+      INSERT INTO messages (user_id, message, created_at)
+      VALUES (${userId}, ${cleanedMessage}, NOW())
+      RETURNING id, user_id, message, created_at
+>>>>>>> Stashed changes
     `
     
     res.json({ success: true, message: result[0] })
