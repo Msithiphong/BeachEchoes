@@ -10,11 +10,7 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.csithiphong.beachechoes",
-      "infoPlist": {
-        "NSCameraUsageDescription": "BeachEchoes uses the camera for AR experiences to view and place echoes on campus.",
-        "ITSAppUsesNonExemptEncryption": false
-      }
+      "bundleIdentifier": "com.csithiphong.beachechoes"
     },
     "android": {
       "adaptiveIcon": {
@@ -24,8 +20,7 @@
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false,
-      "package": "com.csithiphong.beachechoes"
+      "predictiveBackGestureEnabled": false
     },
     "web": {
       "output": "static",
@@ -45,8 +40,7 @@
           }
         }
       ],
-      "expo-font",
-      "./plugins/withModularHeaders"
+      "expo-font"
     ],
     "experiments": {
       "typedRoutes": true,
