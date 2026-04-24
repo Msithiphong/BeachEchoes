@@ -4,6 +4,7 @@ import cors from 'cors'
 import dotenv from 'dotenv'
 import admin from 'firebase-admin'
 import { createRequire } from 'module'
+import { VALID_CAMPUS_POLYGON } from './config/campusMap.js'
 
 const require = createRequire(import.meta.url)
 
@@ -661,6 +662,208 @@ app.get("/api/leaderboard", async (req, res) => {
 });
 
 // ------------------ END LEADERBOARD ------------------
+
+// -------------------- POSTS (MAP MVP) --------------------
+
+// Ray-casting point-in-polygon (mirrors helpers/mapUtils.js for backend validation)
+function pointInPolygon(point, polygon) {
+  let inside = false
+  const n = polygon.length
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    const xi = polygon[i].x, yi = polygon[i].y
+    const xj = polygon[j].x, yj = polygon[j].y
+    const intersects =
+      (yi > point.y) !== (yj > point.y) &&
+      point.x < ((xj - xi) * (point.y - yi)) / (yj - yi) + xi
+    if (intersects) inside = !inside
+  }
+  return inside
+}
+
+// POST /api/posts — create a new post (authenticated)
+app.post('/api/posts', requireFirebaseAuth, async (req, res) => {
+  try {
+    const userId = await resolveUserId(req.firebase.uid)
+    if (!userId) return res.status(404).json({ success: false, error: 'User not found' })
+
+    const { imageBase64, overlayText = '', mapX, mapY, contentType = 'image/jpeg' } = req.body
+
+    if (!imageBase64) return res.status(400).json({ success: false, error: 'imageBase64 is required' })
+
+    const text = String(overlayText).slice(0, 2000)
+
+    const x = parseFloat(mapX)
+    const y = parseFloat(mapY)
+    if (isNaN(x) || isNaN(y) || x < 0 || x > 1 || y < 0 || y > 1) {
+      return res.status(400).json({ success: false, error: 'map_x and map_y must be between 0 and 1' })
+    }
+    if (!pointInPolygon({ x, y }, VALID_CAMPUS_POLYGON)) {
+      return res.status(400).json({ success: false, error: 'Location is outside the campus boundary' })
+    }
+
+    // Upload image to Firebase Storage
+    const imageBuffer = Buffer.from(imageBase64, 'base64')
+    const fileName = `posts/${userId}_${Date.now()}.jpg`
+    const file = bucket.file(fileName)
+    await file.save(imageBuffer, { metadata: { contentType }, public: true })
+    const imageUrl = `https://storage.googleapis.com/${bucket.name}/${fileName}`
+
+    const result = await sql`
+      INSERT INTO posts (user_id, image_url, overlay_text, map_x, map_y)
+      VALUES (${userId}, ${imageUrl}, ${text}, ${x}, ${y})
+      RETURNING id, image_url, overlay_text, map_x, map_y, created_at
+    `
+
+    res.status(201).json({ success: true, post: result[0] })
+  } catch (err) {
+    console.error('POST /api/posts error:', err)
+    res.status(500).json({ success: false, error: 'Internal server error' })
+  }
+})
+
+// GET /api/posts/map — active visible posts for the Map tab
+app.get('/api/posts/map', async (req, res) => {
+  try {
+    const rows = await sql`
+      SELECT id, map_x, map_y
+      FROM posts
+      WHERE is_deleted = FALSE
+      ORDER BY created_at DESC
+    `
+    res.json({ success: true, posts: rows })
+  } catch (err) {
+    console.error('GET /api/posts/map error:', err)
+    res.status(500).json({ success: false, error: 'Internal server error' })
+  }
+})
+
+// GET /api/posts/detail?ids=1,2,3 — posts for a tapped cluster, newest first
+app.get('/api/posts/detail', async (req, res) => {
+  try {
+    const raw = String(req.query.ids || '')
+    const ids = raw
+      .split(',')
+      .map((s) => parseInt(s.trim(), 10))
+      .filter((n) => Number.isFinite(n) && n > 0)
+
+    if (!ids.length) return res.status(400).json({ success: false, error: 'ids are required' })
+
+    const rows = await sql`
+      SELECT
+        p.id,
+        p.image_url,
+        p.overlay_text,
+        p.map_x,
+        p.map_y,
+        p.created_at,
+        COALESCE(l.like_count, 0)::int AS like_count
+      FROM posts p
+      LEFT JOIN (
+        SELECT post_id, COUNT(*)::int AS like_count
+        FROM post_likes
+        GROUP BY post_id
+      ) l ON l.post_id = p.id
+      WHERE p.id = ANY(${ids})
+        AND p.is_deleted = FALSE
+      ORDER BY p.created_at DESC
+    `
+    res.json({ success: true, posts: rows })
+  } catch (err) {
+    console.error('GET /api/posts/detail error:', err)
+    res.status(500).json({ success: false, error: 'Internal server error' })
+  }
+})
+
+// DELETE /api/posts/:id — owner-only soft delete
+app.delete('/api/posts/:id', requireFirebaseAuth, async (req, res) => {
+  try {
+    const postId = parseInt(req.params.id, 10)
+    if (!Number.isFinite(postId)) return res.status(400).json({ success: false, error: 'Invalid post id' })
+
+    const userId = await resolveUserId(req.firebase.uid)
+    if (!userId) return res.status(404).json({ success: false, error: 'User not found' })
+
+    const result = await sql`
+      UPDATE posts
+      SET is_deleted = TRUE
+      WHERE id = ${postId} AND user_id = ${userId} AND is_deleted = FALSE
+      RETURNING id
+    `
+    if (!result.length) return res.status(404).json({ success: false, error: 'Post not found or not yours' })
+
+    res.json({ success: true })
+  } catch (err) {
+    console.error('DELETE /api/posts/:id error:', err)
+    res.status(500).json({ success: false, error: 'Internal server error' })
+  }
+})
+
+// POST /api/posts/:id/like — toggle like (insert or delete)
+app.post('/api/posts/:id/like', requireFirebaseAuth, async (req, res) => {
+  try {
+    const postId = parseInt(req.params.id, 10)
+    if (!Number.isFinite(postId)) return res.status(400).json({ success: false, error: 'Invalid post id' })
+
+    const userId = await resolveUserId(req.firebase.uid)
+    if (!userId) return res.status(404).json({ success: false, error: 'User not found' })
+
+    // Check if post exists and is active
+    const postRows = await sql`SELECT id FROM posts WHERE id = ${postId} AND is_deleted = FALSE`
+    if (!postRows.length) return res.status(404).json({ success: false, error: 'Post not found' })
+
+    // Check for existing like
+    const existing = await sql`
+      SELECT id FROM post_likes WHERE post_id = ${postId} AND user_id = ${userId}
+    `
+
+    if (existing.length) {
+      await sql`DELETE FROM post_likes WHERE post_id = ${postId} AND user_id = ${userId}`
+      return res.json({ success: true, liked: false })
+    }
+
+    await sql`INSERT INTO post_likes (post_id, user_id) VALUES (${postId}, ${userId})`
+    res.json({ success: true, liked: true })
+  } catch (err) {
+    console.error('POST /api/posts/:id/like error:', err)
+    res.status(500).json({ success: false, error: 'Internal server error' })
+  }
+})
+
+// POST /api/posts/:id/report — file a report
+app.post('/api/posts/:id/report', requireFirebaseAuth, async (req, res) => {
+  try {
+    const postId = parseInt(req.params.id, 10)
+    if (!Number.isFinite(postId)) return res.status(400).json({ success: false, error: 'Invalid post id' })
+
+    const userId = await resolveUserId(req.firebase.uid)
+    if (!userId) return res.status(404).json({ success: false, error: 'User not found' })
+
+    const { reason, details } = req.body
+    const allowedReasons = ['spam', 'offensive', 'other']
+    if (!reason || !allowedReasons.includes(reason)) {
+      return res.status(400).json({ success: false, error: `reason must be one of: ${allowedReasons.join(', ')}` })
+    }
+    if (reason === 'other' && (!details || !String(details).trim())) {
+      return res.status(400).json({ success: false, error: 'details are required for reason=other' })
+    }
+
+    // Check for post existence
+    const postRows = await sql`SELECT id FROM posts WHERE id = ${postId} AND is_deleted = FALSE`
+    if (!postRows.length) return res.status(404).json({ success: false, error: 'Post not found' })
+
+    await sql`
+      INSERT INTO post_reports (post_id, user_id, reason, details)
+      VALUES (${postId}, ${userId}, ${reason}, ${details ? String(details).trim() : null})
+    `
+
+    res.json({ success: true })
+  } catch (err) {
+    console.error('POST /api/posts/:id/report error:', err)
+    res.status(500).json({ success: false, error: 'Internal server error' })
+  }
+})
+
+// -------------------- END POSTS --------------------
 
 //app.listen(3000, '0.0.0.0', () => {
 //  console.log("Server running on http://0.0.0.0:3000");

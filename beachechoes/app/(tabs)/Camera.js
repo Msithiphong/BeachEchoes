@@ -21,6 +21,7 @@ import { useRouter } from 'expo-router'
 import { CameraView, useCameraPermissions } from 'expo-camera'
 import BackButton from '../../components/BackButton'
 import { theme } from '../../core/theme'
+import { useDraftPost } from '../../context/DraftPostContext'
 
 export default function CameraScreen() {
   // Navigation hook for routing
@@ -34,6 +35,8 @@ export default function CameraScreen() {
   
   // State to prevent multiple simultaneous photo captures
   const [isTakingPicture, setIsTakingPicture] = useState(false)
+
+  const { setLocalImageUri, clearDraft } = useDraftPost()
 
   // Loading state: permissions are being checked
   if (!permission) {
@@ -71,11 +74,12 @@ export default function CameraScreen() {
     try {
       // Capture photo with 80% quality for optimal size/quality balance
       const photo = await cameraRef.current?.takePictureAsync({
-        quality: 0.8, // 0-1 scale, 0.8 provides good balance
-        skipProcessing: true, // Skip post-processing for faster capture
+        quality: 0.8,
+        skipProcessing: true,
       })
-      console.log('Photo saved:', photo.uri)
-      // TODO: Save or upload photo to Firebase Storage via backend API
+      clearDraft()
+      setLocalImageUri(photo.uri)
+      router.push('/EditPost')
     } catch (error) {
       console.error('Camera error:', error)
     } finally {

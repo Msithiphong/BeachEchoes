@@ -14,6 +14,7 @@ export default function NavigationBar() {
     { key: 'home', title: 'Home', icon: 'home', route: '/(tabs)/Dashboard' },
     { key: 'discover', title: 'Discover', icon: 'favorite', route: '/(tabs)/Discover'},
     { key: 'post', title: 'Post', icon: 'add-circle', route: '/(tabs)/Camera' },
+    { key: 'map', title: 'Map', icon: 'map', route: '/(tabs)/Map' },
     { key: 'leaderboard', title: 'Leaderboard', icon: 'leaderboard', route: '/(tabs)/Leaderboard' },
     { key: 'profile', title: 'Profile', icon: 'person', route: '/(tabs)/Profile'},
     
