@@ -18,7 +18,7 @@ const MAX_OVERLAY_LENGTH = 2000;
 
 export default function EditPost() {
   const router = useRouter();
-  const { localImageUri, overlayText, setOverlayText, clearDraft } = useDraftPost();
+  const { localImageUri, overlayText, setOverlayText, capturedAt, clearDraft } = useDraftPost();
 
   const [text, setText] = useState(overlayText);
 
@@ -44,6 +44,10 @@ export default function EditPost() {
     }
   }
 
+  const capturedLabel = capturedAt
+    ? new Date(capturedAt).toLocaleString()
+    : 'Capture time unavailable';
+
   return (
     <KeyboardAvoidingView
       style={styles.flex}
@@ -58,6 +62,7 @@ export default function EditPost() {
           overlayText={text}
           style={styles.preview}
         />
+        <Text style={styles.capturedAt}>Taken: {capturedLabel}</Text>
 
         <View style={styles.inputRow}>
           <TextInput
@@ -89,6 +94,7 @@ const styles = StyleSheet.create({
   flex: { flex: 1, backgroundColor: '#fff' },
   container: { padding: 16, paddingBottom: 40 },
   preview: { borderRadius: 8, marginBottom: 16 },
+  capturedAt: { fontSize: 12, color: '#666', marginBottom: 14 },
   inputRow: { marginBottom: 16 },
   input: {
     borderWidth: 1,

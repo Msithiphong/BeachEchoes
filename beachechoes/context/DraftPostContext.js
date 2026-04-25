@@ -7,12 +7,14 @@ export function DraftPostProvider({ children }) {
   const [overlayText, setOverlayText] = useState('');
   const [mapX, setMapX] = useState(null);
   const [mapY, setMapY] = useState(null);
+  const [capturedAt, setCapturedAt] = useState(null);
 
   function clearDraft() {
     setLocalImageUri(null);
     setOverlayText('');
     setMapX(null);
     setMapY(null);
+    setCapturedAt(null);
   }
 
   return (
@@ -26,6 +28,8 @@ export function DraftPostProvider({ children }) {
         setMapX,
         mapY,
         setMapY,
+        capturedAt,
+        setCapturedAt,
         clearDraft,
       }}
     >

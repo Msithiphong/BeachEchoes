@@ -664,6 +664,38 @@ app.get("/api/leaderboard", async (req, res) => {
 // ------------------ END LEADERBOARD ------------------
 
 // -------------------- POSTS (MAP MVP) --------------------
+const POST_TTL_INTERVAL = '1 day'
+const EXPIRED_POST_CLEANUP_INTERVAL_MS = 15 * 60 * 1000
+
+function getStoragePathFromPublicUrl(imageUrl) {
+  if (!imageUrl || typeof imageUrl !== 'string') return null
+  const expectedPrefix = `https://storage.googleapis.com/${bucket.name}/`
+  if (!imageUrl.startsWith(expectedPrefix)) return null
+  return decodeURIComponent(imageUrl.slice(expectedPrefix.length))
+}
+
+async function cleanupExpiredPosts() {
+  const expiredPosts = await sql`
+    DELETE FROM posts
+    WHERE created_at < NOW() - ${POST_TTL_INTERVAL}::interval
+    RETURNING id, image_url
+  `
+
+  if (!expiredPosts.length) return
+
+  for (const post of expiredPosts) {
+    const storagePath = getStoragePathFromPublicUrl(post.image_url)
+    if (!storagePath) continue
+
+    try {
+      await bucket.file(storagePath).delete({ ignoreNotFound: true })
+    } catch (error) {
+      console.error(`Storage cleanup failed for post ${post.id}:`, error)
+    }
+  }
+
+  console.log(`Expired posts cleaned up: ${expiredPosts.length}`)
+}
 
 // Ray-casting point-in-polygon (mirrors helpers/mapUtils.js for backend validation)
 function pointInPolygon(point, polygon) {
@@ -711,7 +743,14 @@ app.post('/api/posts', requireFirebaseAuth, async (req, res) => {
     const result = await sql`
       INSERT INTO posts (user_id, image_url, overlay_text, map_x, map_y)
       VALUES (${userId}, ${imageUrl}, ${text}, ${x}, ${y})
-      RETURNING id, image_url, overlay_text, map_x, map_y, created_at
+      RETURNING
+        id,
+        image_url,
+        overlay_text,
+        map_x,
+        map_y,
+        created_at,
+        created_at + ${POST_TTL_INTERVAL}::interval AS expires_at
     `
 
     res.status(201).json({ success: true, post: result[0] })
@@ -728,6 +767,7 @@ app.get('/api/posts/map', async (req, res) => {
       SELECT id, map_x, map_y
       FROM posts
       WHERE is_deleted = FALSE
+        AND created_at >= NOW() - ${POST_TTL_INTERVAL}::interval
       ORDER BY created_at DESC
     `
     res.json({ success: true, posts: rows })
@@ -756,6 +796,7 @@ app.get('/api/posts/detail', async (req, res) => {
         p.map_x,
         p.map_y,
         p.created_at,
+        p.created_at + ${POST_TTL_INTERVAL}::interval AS expires_at,
         COALESCE(l.like_count, 0)::int AS like_count
       FROM posts p
       LEFT JOIN (
@@ -765,6 +806,7 @@ app.get('/api/posts/detail', async (req, res) => {
       ) l ON l.post_id = p.id
       WHERE p.id = ANY(${ids})
         AND p.is_deleted = FALSE
+        AND p.created_at >= NOW() - ${POST_TTL_INTERVAL}::interval
       ORDER BY p.created_at DESC
     `
     res.json({ success: true, posts: rows })
@@ -808,7 +850,13 @@ app.post('/api/posts/:id/like', requireFirebaseAuth, async (req, res) => {
     if (!userId) return res.status(404).json({ success: false, error: 'User not found' })
 
     // Check if post exists and is active
-    const postRows = await sql`SELECT id FROM posts WHERE id = ${postId} AND is_deleted = FALSE`
+    const postRows = await sql`
+      SELECT id
+      FROM posts
+      WHERE id = ${postId}
+        AND is_deleted = FALSE
+        AND created_at >= NOW() - ${POST_TTL_INTERVAL}::interval
+    `
     if (!postRows.length) return res.status(404).json({ success: false, error: 'Post not found' })
 
     // Check for existing like
@@ -848,7 +896,13 @@ app.post('/api/posts/:id/report', requireFirebaseAuth, async (req, res) => {
     }
 
     // Check for post existence
-    const postRows = await sql`SELECT id FROM posts WHERE id = ${postId} AND is_deleted = FALSE`
+    const postRows = await sql`
+      SELECT id
+      FROM posts
+      WHERE id = ${postId}
+        AND is_deleted = FALSE
+        AND created_at >= NOW() - ${POST_TTL_INTERVAL}::interval
+    `
     if (!postRows.length) return res.status(404).json({ success: false, error: 'Post not found' })
 
     await sql`
@@ -868,5 +922,15 @@ app.post('/api/posts/:id/report', requireFirebaseAuth, async (req, res) => {
 //app.listen(3000, '0.0.0.0', () => {
 //  console.log("Server running on http://0.0.0.0:3000");
 //});
+
+cleanupExpiredPosts().catch((error) => {
+  console.error('Initial expired-post cleanup failed:', error)
+})
+
+setInterval(() => {
+  cleanupExpiredPosts().catch((error) => {
+    console.error('Scheduled expired-post cleanup failed:', error)
+  })
+}, EXPIRED_POST_CLEANUP_INTERVAL_MS)
 
 app.listen(3000, () => console.log('Server running on http://localhost:3000'))
