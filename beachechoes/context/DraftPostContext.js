@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState } from 'react';
+import { DEFAULT_POST_CATEGORY } from '../config/postCategories';
 
 const DraftPostContext = createContext(null);
 
@@ -8,6 +9,7 @@ export function DraftPostProvider({ children }) {
   const [mapX, setMapX] = useState(null);
   const [mapY, setMapY] = useState(null);
   const [capturedAt, setCapturedAt] = useState(null);
+  const [category, setCategory] = useState(DEFAULT_POST_CATEGORY);
 
   function clearDraft() {
     setLocalImageUri(null);
@@ -15,6 +17,7 @@ export function DraftPostProvider({ children }) {
     setMapX(null);
     setMapY(null);
     setCapturedAt(null);
+    setCategory(DEFAULT_POST_CATEGORY);
   }
 
   return (
@@ -30,6 +33,8 @@ export function DraftPostProvider({ children }) {
         setMapY,
         capturedAt,
         setCapturedAt,
+        category,
+        setCategory,
         clearDraft,
       }}
     >

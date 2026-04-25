@@ -13,14 +13,17 @@ import { useRouter } from 'expo-router';
 import { useDraftPost } from '../context/DraftPostContext';
 import PostImageWithOverlay from '../components/PostImageWithOverlay';
 import { theme } from '../core/theme';
+import { DEFAULT_POST_CATEGORY, POST_CATEGORIES } from '../config/postCategories';
 
 const MAX_OVERLAY_LENGTH = 2000;
 
 export default function EditPost() {
   const router = useRouter();
-  const { localImageUri, overlayText, setOverlayText, capturedAt, clearDraft } = useDraftPost();
+  const { localImageUri, overlayText, setOverlayText, category, setCategory, capturedAt, clearDraft } = useDraftPost();
 
   const [text, setText] = useState(overlayText);
+  const [selectedCategory, setSelectedCategory] = useState(category || DEFAULT_POST_CATEGORY);
+  const [categoryOpen, setCategoryOpen] = useState(false);
 
   if (!localImageUri) {
     // Guard: if someone lands here without a draft, send them back.
@@ -35,6 +38,7 @@ export default function EditPost() {
 
   function handleContinue() {
     setOverlayText(text.trim());
+    setCategory(selectedCategory);
     router.push('/MapPlacement');
   }
 
@@ -63,6 +67,38 @@ export default function EditPost() {
           style={styles.preview}
         />
         <Text style={styles.capturedAt}>Taken: {capturedLabel}</Text>
+
+        <View style={styles.categoryRow}>
+          <Text style={styles.categoryLabel}>Category</Text>
+          <TouchableOpacity
+            style={styles.categoryTrigger}
+            onPress={() => setCategoryOpen((prev) => !prev)}
+          >
+            <Text style={styles.categoryValue}>{selectedCategory}</Text>
+            <Text style={styles.categoryChevron}>{categoryOpen ? '▲' : '▼'}</Text>
+          </TouchableOpacity>
+          {categoryOpen && (
+            <View style={styles.categoryMenu}>
+              {POST_CATEGORIES.map((item) => {
+                const active = item === selectedCategory;
+                return (
+                  <TouchableOpacity
+                    key={item}
+                    style={[styles.categoryOption, active && styles.categoryOptionActive]}
+                    onPress={() => {
+                      setSelectedCategory(item);
+                      setCategoryOpen(false);
+                    }}
+                  >
+                    <Text style={[styles.categoryOptionText, active && styles.categoryOptionTextActive]}>
+                      {item}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          )}
+        </View>
 
         <View style={styles.inputRow}>
           <TextInput
@@ -95,6 +131,33 @@ const styles = StyleSheet.create({
   container: { padding: 16, paddingBottom: 40 },
   preview: { borderRadius: 8, marginBottom: 16 },
   capturedAt: { fontSize: 12, color: '#666', marginBottom: 14 },
+  categoryRow: { marginBottom: 16 },
+  categoryLabel: { fontSize: 13, color: '#555', marginBottom: 6, fontWeight: '600' },
+  categoryTrigger: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#fff',
+  },
+  categoryValue: { fontSize: 15, color: '#222' },
+  categoryChevron: { color: '#888', fontSize: 12 },
+  categoryMenu: {
+    borderWidth: 1,
+    borderColor: '#e2e2e2',
+    borderRadius: 8,
+    marginTop: 8,
+    overflow: 'hidden',
+    backgroundColor: '#fff',
+  },
+  categoryOption: { paddingHorizontal: 12, paddingVertical: 12 },
+  categoryOptionActive: { backgroundColor: '#f0f7ff' },
+  categoryOptionText: { fontSize: 15, color: '#222' },
+  categoryOptionTextActive: { color: theme.colors.primary, fontWeight: '700' },
   inputRow: { marginBottom: 16 },
   input: {
     borderWidth: 1,

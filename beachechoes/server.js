@@ -5,6 +5,7 @@ import dotenv from 'dotenv'
 import admin from 'firebase-admin'
 import { createRequire } from 'module'
 import { VALID_CAMPUS_POLYGON } from './config/campusMap.js'
+import { DEFAULT_POST_CATEGORY, isValidPostCategory } from './config/postCategories.js'
 
 const require = createRequire(import.meta.url)
 
@@ -718,11 +719,15 @@ app.post('/api/posts', requireFirebaseAuth, async (req, res) => {
     const userId = await resolveUserId(req.firebase.uid)
     if (!userId) return res.status(404).json({ success: false, error: 'User not found' })
 
-    const { imageBase64, overlayText = '', mapX, mapY, contentType = 'image/jpeg' } = req.body
+    const { imageBase64, overlayText = '', category = DEFAULT_POST_CATEGORY, mapX, mapY, contentType = 'image/jpeg' } = req.body
 
     if (!imageBase64) return res.status(400).json({ success: false, error: 'imageBase64 is required' })
 
     const text = String(overlayText).slice(0, 2000)
+    const normalizedCategory = String(category || '').trim()
+    if (!isValidPostCategory(normalizedCategory)) {
+      return res.status(400).json({ success: false, error: 'Invalid category' })
+    }
 
     const x = parseFloat(mapX)
     const y = parseFloat(mapY)
@@ -741,12 +746,13 @@ app.post('/api/posts', requireFirebaseAuth, async (req, res) => {
     const imageUrl = `https://storage.googleapis.com/${bucket.name}/${fileName}`
 
     const result = await sql`
-      INSERT INTO posts (user_id, image_url, overlay_text, map_x, map_y)
-      VALUES (${userId}, ${imageUrl}, ${text}, ${x}, ${y})
+      INSERT INTO posts (user_id, image_url, overlay_text, category, map_x, map_y)
+      VALUES (${userId}, ${imageUrl}, ${text}, ${normalizedCategory}, ${x}, ${y})
       RETURNING
         id,
         image_url,
         overlay_text,
+        category,
         map_x,
         map_y,
         created_at,
@@ -793,6 +799,7 @@ app.get('/api/posts/detail', async (req, res) => {
         p.id,
         p.image_url,
         p.overlay_text,
+        p.category,
         p.map_x,
         p.map_y,
         p.created_at,

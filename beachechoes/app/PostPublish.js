@@ -12,7 +12,7 @@ import { theme } from '../core/theme';
  */
 export default function PostPublish() {
   const router = useRouter();
-  const { localImageUri, overlayText, mapX, mapY, clearDraft } = useDraftPost();
+  const { localImageUri, overlayText, category, mapX, mapY, clearDraft } = useDraftPost();
   const didSubmit = useRef(false);
 
   useEffect(() => {
@@ -24,7 +24,7 @@ export default function PostPublish() {
       return;
     }
 
-    publishPost({ localImageUri, overlayText, mapX, mapY })
+    publishPost({ localImageUri, overlayText, category, mapX, mapY })
       .then(() => {
         clearDraft();
         router.replace('/(tabs)/Map');

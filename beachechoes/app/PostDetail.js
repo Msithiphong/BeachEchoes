@@ -53,6 +53,11 @@ export default function PostDetail() {
 
     return (
       <View style={styles.card}>
+        <View style={styles.cardTopMeta}>
+          <View style={styles.categoryBadge}>
+            <Text style={styles.categoryBadgeText}>{item.category || 'Tips'}</Text>
+          </View>
+        </View>
         <PostImageWithOverlay
           imageUri={item.image_url}
           overlayText={item.overlay_text}
@@ -151,6 +156,23 @@ const styles = StyleSheet.create({
     shadowRadius: 3,
   },
   image: { borderRadius: 0 },
+  cardTopMeta: {
+    paddingHorizontal: 12,
+    paddingTop: 12,
+    paddingBottom: 8,
+  },
+  categoryBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#e9f4ff',
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  categoryBadgeText: {
+    color: '#145ea8',
+    fontSize: 12,
+    fontWeight: '700',
+  },
   cardFooter: {
     flexDirection: 'row',
     alignItems: 'center',
