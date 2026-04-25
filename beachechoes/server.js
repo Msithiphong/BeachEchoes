@@ -769,11 +769,18 @@ app.post('/api/posts', requireFirebaseAuth, async (req, res) => {
 // GET /api/posts/map — active visible posts for the Map tab
 app.get('/api/posts/map', async (req, res) => {
   try {
+    const rawCategory = String(req.query.category || '').trim()
+    const shouldFilterCategory = rawCategory.length > 0
+    if (shouldFilterCategory && !isValidPostCategory(rawCategory)) {
+      return res.status(400).json({ success: false, error: 'Invalid category' })
+    }
+
     const rows = await sql`
       SELECT id, map_x, map_y
       FROM posts
       WHERE is_deleted = FALSE
         AND created_at >= NOW() - ${POST_TTL_INTERVAL}::interval
+        AND (${!shouldFilterCategory} OR category = ${rawCategory})
       ORDER BY created_at DESC
     `
     res.json({ success: true, posts: rows })

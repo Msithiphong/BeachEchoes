@@ -6,9 +6,9 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
-  Alert,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { AuthContext } from '../context/AuthContext';
 import { API_BASE } from '../config/api';
@@ -17,6 +17,13 @@ import LikeButton from '../components/LikeButton';
 import ReportPostModal from '../components/ReportPostModal';
 import DeletePostModal from '../components/DeletePostModal';
 import { theme } from '../core/theme';
+
+function formatDateTime(ts) {
+  if (!ts) return 'Unknown time';
+  const date = new Date(ts);
+  if (Number.isNaN(date.getTime())) return 'Unknown time';
+  return date.toLocaleString();
+}
 
 export default function PostDetail() {
   const router = useRouter();
@@ -50,6 +57,8 @@ export default function PostDetail() {
 
   function renderItem({ item }) {
     const isOwner = user?.uid && item.owner_firebase_uid === user.uid;
+    const createdLabel = formatDateTime(item.created_at);
+    const expiresLabel = formatDateTime(item.expires_at);
 
     return (
       <View style={styles.card}>
@@ -57,12 +66,14 @@ export default function PostDetail() {
           <View style={styles.categoryBadge}>
             <Text style={styles.categoryBadgeText}>{item.category || 'Tips'}</Text>
           </View>
+          <Text style={styles.timeText}>Posted {createdLabel}</Text>
         </View>
         <PostImageWithOverlay
           imageUri={item.image_url}
           overlayText={item.overlay_text}
           style={styles.image}
         />
+        <Text style={styles.expiresText}>Expires {expiresLabel}</Text>
         <View style={styles.cardFooter}>
           <LikeButton
             postId={item.id}
@@ -85,14 +96,21 @@ export default function PostDetail() {
   }
 
   return (
-    <View style={styles.container}>
+    <LinearGradient
+      colors={['#96c7e3', '#edd02c']}
+      start={{ x: 0.5, y: 0 }}
+      end={{ x: 0.5, y: 1 }}
+      style={styles.container}
+    >
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <MaterialIcons name="arrow-back" size={24} color="#333" />
+          <MaterialIcons name="arrow-back" size={24} color="#0f172a" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Posts here</Text>
-        <View style={styles.headerSpacer} />
+        <View style={styles.headerTextWrap}>
+          <Text style={styles.headerTitle}>Posts At This Spot</Text>
+          <Text style={styles.headerSubtitle}>Tap into the campus moment.</Text>
+        </View>
       </View>
 
       {loading ? (
@@ -123,55 +141,77 @@ export default function PostDetail() {
           setDeleteTarget(null);
         }}
       />
-    </View>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f5f5f5' },
+  container: { flex: 1 },
   header: {
+    marginTop: 52,
+    marginHorizontal: 16,
+    marginBottom: 8,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 52,
-    paddingBottom: 12,
-    backgroundColor: '#fff',
-    borderBottomWidth: 1,
-    borderColor: '#eee',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.82)',
   },
-  backBtn: { padding: 4 },
-  headerTitle: { flex: 1, textAlign: 'center', fontSize: 17, fontWeight: '700' },
-  headerSpacer: { width: 32 },
+  backBtn: { padding: 4, marginRight: 8 },
+  headerTextWrap: { flex: 1 },
+  headerTitle: { fontSize: 20, fontWeight: '800', color: '#0f172a' },
+  headerSubtitle: { fontSize: 13, color: '#334155', marginTop: 1 },
   loader: { marginTop: 60 },
-  empty: { textAlign: 'center', color: '#888', marginTop: 60, fontSize: 15 },
-  list: { padding: 16, gap: 16 },
-  card: {
-    backgroundColor: '#fff',
+  empty: {
+    textAlign: 'center',
+    color: '#1e293b',
+    marginTop: 60,
+    fontSize: 15,
+    backgroundColor: 'rgba(255,255,255,0.65)',
+    marginHorizontal: 16,
+    paddingVertical: 14,
     borderRadius: 12,
+  },
+  list: { padding: 16, gap: 16, paddingBottom: 28 },
+  card: {
+    backgroundColor: 'rgba(255,255,255,0.88)',
+    borderRadius: 18,
     overflow: 'hidden',
-    elevation: 2,
-    shadowColor: '#000',
+    elevation: 3,
+    shadowColor: '#111827',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.12,
-    shadowRadius: 3,
+    shadowOpacity: 0.14,
+    shadowRadius: 7,
   },
   image: { borderRadius: 0 },
   cardTopMeta: {
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     paddingTop: 12,
-    paddingBottom: 8,
+    paddingBottom: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   categoryBadge: {
     alignSelf: 'flex-start',
-    backgroundColor: '#e9f4ff',
+    backgroundColor: '#e6f0ff',
     borderRadius: 999,
-    paddingHorizontal: 10,
+    paddingHorizontal: 11,
     paddingVertical: 4,
   },
   categoryBadgeText: {
-    color: '#145ea8',
+    color: '#1d4f91',
     fontSize: 12,
     fontWeight: '700',
+  },
+  timeText: { fontSize: 11, color: '#64748b', fontWeight: '600' },
+  expiresText: {
+    paddingHorizontal: 14,
+    paddingTop: 8,
+    fontSize: 12,
+    color: '#475569',
+    fontWeight: '600',
   },
   cardFooter: {
     flexDirection: 'row',
