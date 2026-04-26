@@ -8,6 +8,8 @@ CREATE TABLE IF NOT EXISTS posts (
   user_id       INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
   image_url     TEXT    NOT NULL,
   overlay_text  TEXT    NOT NULL DEFAULT '',
+  category      TEXT    NOT NULL DEFAULT 'Tips'
+                CHECK (category IN ('Tips', 'Events', 'Funny', 'Food', 'Study Spots')),
   map_x         NUMERIC(6,5) NOT NULL CHECK (map_x >= 0 AND map_x <= 1),
   map_y         NUMERIC(6,5) NOT NULL CHECK (map_y >= 0 AND map_y <= 1),
   is_deleted    BOOLEAN NOT NULL DEFAULT FALSE,

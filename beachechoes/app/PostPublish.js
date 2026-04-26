@@ -1,9 +1,9 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, ActivityIndicator, StyleSheet, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useDraftPost } from '../context/DraftPostContext';
 import { publishPost } from '../helpers/postUpload';
-import { theme } from '../core/theme';
 
 /**
  * Intermediate screen that runs the publish network request.
@@ -12,7 +12,7 @@ import { theme } from '../core/theme';
  */
 export default function PostPublish() {
   const router = useRouter();
-  const { localImageUri, overlayText, mapX, mapY, clearDraft } = useDraftPost();
+  const { localImageUri, overlayText, category, mapX, mapY, clearDraft } = useDraftPost();
   const didSubmit = useRef(false);
 
   useEffect(() => {
@@ -24,7 +24,7 @@ export default function PostPublish() {
       return;
     }
 
-    publishPost({ localImageUri, overlayText, mapX, mapY })
+    publishPost({ localImageUri, overlayText, category, mapX, mapY })
       .then(() => {
         clearDraft();
         router.replace('/(tabs)/Map');
@@ -40,14 +40,37 @@ export default function PostPublish() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <View style={styles.container}>
-      <ActivityIndicator size="large" color={theme.colors.primary} />
-      <Text style={styles.label}>Publishing…</Text>
-    </View>
+    <LinearGradient
+      colors={['#96c7e3', '#edd02c']}
+      start={{ x: 0.5, y: 0 }}
+      end={{ x: 0.5, y: 1 }}
+      style={styles.container}
+    >
+      <View style={styles.card}>
+        <ActivityIndicator size="large" color="#0f172a" />
+        <Text style={styles.title}>Publishing Your Echo</Text>
+        <Text style={styles.label}>Sending your post to the map...</Text>
+      </View>
+    </LinearGradient>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' },
-  label: { marginTop: 16, fontSize: 16, color: '#555' },
+  container: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20 },
+  card: {
+    width: '100%',
+    maxWidth: 360,
+    borderRadius: 20,
+    paddingVertical: 28,
+    paddingHorizontal: 20,
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.86)',
+    shadowColor: '#111827',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  title: { marginTop: 14, fontSize: 20, fontWeight: '800', color: '#0f172a' },
+  label: { marginTop: 8, fontSize: 14, color: '#334155', textAlign: 'center' },
 });
