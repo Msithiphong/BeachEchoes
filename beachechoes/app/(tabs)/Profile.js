@@ -8,6 +8,7 @@ import Background from '../../components/Background'
 import Header from '../../components/Header'
 import Button from '../../components/Button'
 import ImageCard from '../../components/ImageCard'
+import UserAutocomplete from '../../components/UserAutocomplete'
 import { AuthContext } from '../../context/AuthContext'
 import { uploadAvatar } from '../../helpers/avatarUpload'
 import { auth } from '../../config/firebase'
@@ -139,6 +140,16 @@ export default function Profile() {
     if (saving) return
     setEditing(false)
     await fetchProfile()
+  }
+
+  // Navigate to the selected user's profile (or stay on Profile tab if it's the current user)
+  const handleSelectUser = (item) => {
+    if (item.id === user?.uid) {
+      // Already on own profile, do nothing or scroll to top
+      scrollRef.current?.scrollTo({ y: 0, animated: true })
+    } else {
+      router.push(`/profile/${item.id}`)
+    }
   }
 
   const pickAvatar = async () => {
@@ -316,6 +327,17 @@ export default function Profile() {
             Edit Profile
           </Button>
         )}
+
+        {/* User Search */}
+        <View style={styles.searchSection}>
+          <Text style={styles.searchTitle}>Discover Users</Text>
+          <View style={styles.searchContainer}>
+            <UserAutocomplete
+              onSelectUser={handleSelectUser}
+              placeholder="Search users..."
+            />
+          </View>
+        </View>
 
         {/* User's Posts */}
         <View style={styles.messagesSection} onLayout={(e) => { echoesYRef.current = e.nativeEvent.layout.y }}>
@@ -523,6 +545,24 @@ const styles = StyleSheet.create({
   backButtonText: {
     fontSize: 16,
     fontWeight: '600',
+  },
+
+  searchSection: {
+    width: '100%',
+    marginTop: 20,
+    marginBottom: 10,
+  },
+
+  searchTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+
+  searchContainer: {
+    width: '100%',
+    zIndex: 1,
   },
 
   messagesSection: {

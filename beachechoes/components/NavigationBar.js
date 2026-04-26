@@ -12,7 +12,6 @@ export default function NavigationBar() {
   const [index, setIndex] = useState(0)
   const [routes] = useState([
     { key: 'home', title: 'Home', icon: 'home', route: '/(tabs)/Dashboard' },
-    { key: 'discover', title: 'Discover', icon: 'favorite', route: '/(tabs)/Discover'},
     { key: 'post', title: 'Post', icon: 'add-circle', route: '/(tabs)/Camera' },
     { key: 'map', title: 'Map', icon: 'map', route: '/(tabs)/Map' },
     { key: 'leaderboard', title: 'Leaderboard', icon: 'leaderboard', route: '/(tabs)/Leaderboard' },
