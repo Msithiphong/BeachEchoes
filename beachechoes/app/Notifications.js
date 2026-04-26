@@ -12,48 +12,114 @@ import { auth } from '../config/firebase'
 import { AuthContext } from '../context/AuthContext'
 import { theme } from '../core/theme'
 
+const POLLING_INTERVAL_MS = 30000 // 30 seconds
+
 export default function Notifications() {
   const router = useRouter()
   const { user } = useContext(AuthContext)
 
-  const [requests, setRequests] = useState([])
+  const [notifications, setNotifications] = useState([])
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
 
-  const fetchPendingRequests = useCallback(async () => {
+  const fetchNotifications = useCallback(async (isRefresh = false) => {
     try {
+      if (!isRefresh) setLoading(true)
       const token = await auth.currentUser?.getIdToken()
-      const res = await fetch(`${API_BASE}/friendships/pending`, {
+      const res = await fetch(`${API_BASE}/notifications`, {
         headers: { Authorization: `Bearer ${token}` },
       })
       const data = await res.json()
       if (data?.success) {
-        setRequests(data.requests ?? [])
+        setNotifications(data.notifications ?? [])
       }
     } catch (err) {
-      console.error('Fetch pending requests error:', err)
+      console.error('Fetch notifications error:', err)
     } finally {
       setLoading(false)
+      if (isRefresh) setRefreshing(false)
     }
   }, [])
 
   useEffect(() => {
-    fetchPendingRequests()
-  }, [fetchPendingRequests])
+    fetchNotifications()
 
-  const handleAccept = async (friendUid) => {
+    // Poll for new notifications every 30 seconds
+    const interval = setInterval(() => {
+      fetchNotifications(true)
+    }, POLLING_INTERVAL_MS)
+
+    return () => clearInterval(interval)
+  }, [fetchNotifications])
+
+  const markAsRead = async (notificationIds) => {
     try {
       const token = await auth.currentUser?.getIdToken()
+      await fetch(`${API_BASE}/notifications/read`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ notificationIds }),
+      })
+      // Update local state
+      setNotifications((prev) =>
+        prev.map((n) =>
+          notificationIds.includes(n.id) ? { ...n, read: true } : n
+        )
+      )
+    } catch (err) {
+      console.error('Mark as read error:', err)
+    }
+  }
+
+  const handleNotificationPress = async (notification) => {
+    // Mark as read
+    if (!notification.read) {
+      await markAsRead([notification.id])
+    }
+
+    // Navigate based on type
+    if (notification.type === 'friend_request') {
+      // Navigate to accept/decline screen or show inline actions
+      // For now, we'll handle friend requests inline
+    } else if (notification.type === 'post_liked') {
+      // Navigate to the post detail or user profile
+      router.push(`/PostDetail?ids=${notification.data.post_id}`)
+    } else if (notification.type === 'post_expired') {
+      // Just mark as read, no navigation
+    }
+  }
+
+  const handleAcceptFriendRequest = async (notification) => {
+    try {
+      const token = await auth.currentUser?.getIdToken()
+      
+      // Get firebase_uid from user_id
+      const userRes = await fetch(`${API_BASE}/users/search?q=`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const userData = await userRes.json()
+      const requester = userData.users?.find(u => u.user_id === notification.data.from_user_id)
+      
+      if (!requester) {
+        Alert.alert('Error', 'Could not find user')
+        return
+      }
+
       const res = await fetch(`${API_BASE}/friendships/accept`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ friendUid }),
+        body: JSON.stringify({ friendUid: requester.firebase_uid }),
       })
       const data = await res.json()
       if (data?.success) {
-        setRequests((prev) => prev.filter((r) => r.firebase_uid !== friendUid))
+        await markAsRead([notification.id])
+        fetchNotifications(true)
       }
     } catch (err) {
       console.error('Accept error:', err)
@@ -61,20 +127,34 @@ export default function Notifications() {
     }
   }
 
-  const handleDecline = async (friendUid) => {
+  const handleDeclineFriendRequest = async (notification) => {
     try {
       const token = await auth.currentUser?.getIdToken()
+      
+      // Get firebase_uid from user_id
+      const userRes = await fetch(`${API_BASE}/users/search?q=`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const userData = await userRes.json()
+      const requester = userData.users?.find(u => u.user_id === notification.data.from_user_id)
+      
+      if (!requester) {
+        Alert.alert('Error', 'Could not find user')
+        return
+      }
+
       const res = await fetch(`${API_BASE}/friendships/unfollow`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ friendUid }),
+        body: JSON.stringify({ friendUid: requester.firebase_uid }),
       })
       const data = await res.json()
       if (data?.success) {
-        setRequests((prev) => prev.filter((r) => r.firebase_uid !== friendUid))
+        await markAsRead([notification.id])
+        fetchNotifications(true)
       }
     } catch (err) {
       console.error('Decline error:', err)
@@ -82,60 +162,119 @@ export default function Notifications() {
     }
   }
 
-  const renderRequest = ({ item }) => (
-    <View style={styles.card}>
-      <TouchableOpacity
-        style={styles.userInfo}
-        onPress={() => router.push(`/profile/${item.firebase_uid}`)}
-      >
-        <Image
-          source={{
-            uri:
-              item.avatar_url ||
-              'https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png',
-          }}
-          style={styles.avatar}
-        />
-        <View style={styles.nameContainer}>
-          <Text style={styles.userName}>{item.name || 'Unknown User'}</Text>
-          <Text style={styles.subtitle}>Wants to follow you</Text>
-        </View>
-      </TouchableOpacity>
+  const renderNotification = ({ item }) => {
+    const isUnread = !item.read
 
-      <View style={styles.actions}>
-        <TouchableOpacity
-          style={styles.acceptButton}
-          onPress={() => handleAccept(item.firebase_uid)}
-        >
-          <Text style={styles.acceptText}>Accept</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.declineButton}
-          onPress={() => handleDecline(item.firebase_uid)}
-        >
-          <Text style={styles.declineText}>Decline</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  )
+    return (
+      <TouchableOpacity
+        style={[styles.card, isUnread && styles.unreadCard]}
+        onPress={() => handleNotificationPress(item)}
+      >
+        {/* Friend Request Notification */}
+        {item.type === 'friend_request' && (
+          <>
+            <View style={styles.userInfo}>
+              <Image
+                source={{
+                  uri:
+                    item.data.from_avatar_url ||
+                    'https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png',
+                }}
+                style={styles.avatar}
+              />
+              <View style={styles.nameContainer}>
+                <Text style={styles.userName}>{item.data.from_name}</Text>
+                <Text style={styles.subtitle}>Wants to follow you</Text>
+                <Text style={styles.timeText}>
+                  {new Date(item.created_at).toLocaleDateString()}
+                </Text>
+              </View>
+            </View>
+            <View style={styles.actions}>
+              <TouchableOpacity
+                style={styles.acceptButton}
+                onPress={() => handleAcceptFriendRequest(item)}
+              >
+                <Text style={styles.acceptText}>Accept</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.declineButton}
+                onPress={() => handleDeclineFriendRequest(item)}
+              >
+                <Text style={styles.declineText}>Decline</Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
+
+        {/* Post Liked Notification */}
+        {item.type === 'post_liked' && (
+          <View style={styles.userInfo}>
+            <Image
+              source={{
+                uri:
+                  item.data.liker_avatar_url ||
+                  'https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png',
+              }}
+              style={styles.avatar}
+            />
+            <View style={styles.nameContainer}>
+              <Text style={styles.userName}>{item.data.liker_name}</Text>
+              <Text style={styles.subtitle}>Liked your post</Text>
+              <Text style={styles.timeText}>
+                {new Date(item.created_at).toLocaleDateString()}
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {/* Post Expired Notification */}
+        {item.type === 'post_expired' && (
+          <View style={styles.userInfo}>
+            <View style={[styles.avatar, styles.expiredIcon]}>
+              <Text style={styles.expiredEmoji}>⏱️</Text>
+            </View>
+            <View style={styles.nameContainer}>
+              <Text style={styles.userName}>Post Expired</Text>
+              <Text style={styles.subtitle}>{item.data.overlay_text}</Text>
+              <Text style={styles.timeText}>
+                {new Date(item.created_at).toLocaleDateString()}
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {isUnread && <View style={styles.unreadDot} />}
+      </TouchableOpacity>
+    )
+  }
+
+  const unreadCount = notifications.filter((n) => !n.read).length
 
   return (
     <Background>
-      <Header>Notifications</Header>
+      <Header>
+        Notifications {unreadCount > 0 && `(${unreadCount})`}
+      </Header>
 
       {loading ? (
         <ActivityIndicator size="large" color={theme.colors.primary} />
-      ) : requests.length === 0 ? (
+      ) : notifications.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>No pending requests</Text>
+          <Text style={styles.emptyText}>No notifications</Text>
         </View>
       ) : (
         <FlatList
-          data={requests}
-          keyExtractor={(item) => item.firebase_uid}
-          renderItem={renderRequest}
+          data={notifications}
+          keyExtractor={(item) => item.id.toString()}
+          renderItem={renderNotification}
           style={styles.list}
           contentContainerStyle={styles.listContent}
+          refreshing={refreshing}
+          onRefresh={() => {
+            setRefreshing(true)
+            fetchNotifications(true)
+          }}
         />
       )}
 
@@ -162,6 +301,21 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 8,
     elevation: 2,
+    position: 'relative',
+  },
+  unreadCard: {
+    backgroundColor: '#fffaed',
+    borderLeftWidth: 3,
+    borderLeftColor: theme.colors.primary,
+  },
+  unreadDot: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: theme.colors.primary,
   },
   userInfo: {
     flexDirection: 'row',
@@ -175,6 +329,14 @@ const styles = StyleSheet.create({
     marginRight: 12,
     backgroundColor: '#eee',
   },
+  expiredIcon: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f0f0f0',
+  },
+  expiredEmoji: {
+    fontSize: 24,
+  },
   nameContainer: {
     flex: 1,
   },
@@ -187,6 +349,11 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#888',
     marginTop: 2,
+  },
+  timeText: {
+    fontSize: 11,
+    color: '#aaa',
+    marginTop: 4,
   },
   actions: {
     flexDirection: 'row',

@@ -299,6 +299,110 @@ async function resolveUserId(firebaseUid) {
   return rows.length ? rows[0].user_id : null
 }
 
+// -------------------- NOTIFICATIONS --------------------
+
+// Notification types (extensible for future use)
+const NOTIFICATION_TYPES = {
+  FRIEND_REQUEST: 'friend_request',
+  POST_LIKED: 'post_liked',
+  POST_EXPIRED: 'post_expired'
+}
+
+const MAX_NOTIFICATIONS_PER_USER = 15
+
+/**
+ * Create a notification for a user (modular, WebSocket-ready)
+ * @param {number} userId - Recipient user ID
+ * @param {string} type - Notification type (from NOTIFICATION_TYPES)
+ * @param {object} data - Notification-specific data (JSON)
+ */
+async function createNotification(userId, type, data) {
+  try {
+    // Insert new notification
+    await sql`
+      INSERT INTO notifications (user_id, type, data, created_at, read)
+      VALUES (${userId}, ${type}, ${JSON.stringify(data)}, NOW(), FALSE)
+    `
+
+    // Enforce max 15 notifications per user (delete oldest if over limit)
+    await sql`
+      DELETE FROM notifications
+      WHERE id IN (
+        SELECT id FROM notifications
+        WHERE user_id = ${userId}
+        ORDER BY created_at DESC
+        OFFSET ${MAX_NOTIFICATIONS_PER_USER}
+      )
+    `
+
+    // Future WebSocket hook: emit event here when WebSocket server is added
+    // Example: notificationEmitter.emit('new_notification', { userId, type, data })
+  } catch (error) {
+    console.error('Create notification error:', error)
+    // Don't throw - notifications should not break core functionality
+  }
+}
+
+// GET /api/notifications — fetch latest notifications for authenticated user
+app.get('/api/notifications', requireFirebaseAuth, async (req, res) => {
+  try {
+    const userId = await resolveUserId(req.firebase.uid)
+    if (!userId) {
+      return res.status(404).json({ success: false, error: 'User not found' })
+    }
+
+    const notifications = await sql`
+      SELECT id, type, data, created_at, read
+      FROM notifications
+      WHERE user_id = ${userId}
+      ORDER BY created_at DESC
+      LIMIT ${MAX_NOTIFICATIONS_PER_USER}
+    `
+
+    res.json({ success: true, notifications })
+  } catch (error) {
+    console.error('Get notifications error:', error)
+    res.status(500).json({ success: false, error: 'Internal server error' })
+  }
+})
+
+// POST /api/notifications/read — mark notifications as read
+app.post('/api/notifications/read', requireFirebaseAuth, async (req, res) => {
+  try {
+    const userId = await resolveUserId(req.firebase.uid)
+    if (!userId) {
+      return res.status(404).json({ success: false, error: 'User not found' })
+    }
+
+    const { notificationIds } = req.body
+    
+    if (!notificationIds || !Array.isArray(notificationIds)) {
+      return res.status(400).json({ success: false, error: 'notificationIds array required' })
+    }
+
+    if (notificationIds.length === 0) {
+      return res.json({ success: true, updated: 0 })
+    }
+
+    // Mark as read only if owned by this user (security)
+    const result = await sql`
+      UPDATE notifications
+      SET read = TRUE
+      WHERE user_id = ${userId}
+        AND id = ANY(${notificationIds})
+        AND read = FALSE
+      RETURNING id
+    `
+
+    res.json({ success: true, updated: result.length })
+  } catch (error) {
+    console.error('Mark notifications read error:', error)
+    res.status(500).json({ success: false, error: 'Internal server error' })
+  }
+})
+
+// ------------------ END NOTIFICATIONS ------------------
+
 // GET friendship status between the authed user and another user
 app.get('/api/friendships/status/:friendUid', requireFirebaseAuth, async (req, res) => {
   try {
@@ -352,11 +456,26 @@ app.post('/api/friendships/follow', requireFirebaseAuth, async (req, res) => {
     }
 
     // Insert pending friendship (ignore if already exists)
-    await sql`
+    const insertResult = await sql`
       INSERT INTO friendships (user_id, friend_id, status)
       VALUES (${myId}, ${friendId}, 'pending')
       ON CONFLICT (user_id, friend_id) DO NOTHING
+      RETURNING user_id
     `
+
+    // Create notification for the friend request recipient (if new request)
+    if (insertResult.length > 0) {
+      const senderInfo = await sql`
+        SELECT name, avatar_url FROM users WHERE user_id = ${myId}
+      `
+      if (senderInfo.length > 0) {
+        await createNotification(friendId, NOTIFICATION_TYPES.FRIEND_REQUEST, {
+          from_user_id: myId,
+          from_name: senderInfo[0].name || 'Someone',
+          from_avatar_url: senderInfo[0].avatar_url || null
+        })
+      }
+    }
 
     res.json({ success: true, status: 'pending' })
   } catch (error) {
@@ -723,19 +842,28 @@ async function cleanupExpiredPosts() {
   const expiredPosts = await sql`
     DELETE FROM posts
     WHERE created_at < NOW() - ${POST_TTL_INTERVAL}::interval
-    RETURNING id, image_url
+    RETURNING id, user_id, image_url, overlay_text, is_anonymous
   `
 
   if (!expiredPosts.length) return
 
   for (const post of expiredPosts) {
+    // Delete image from Firebase Storage
     const storagePath = getStoragePathFromPublicUrl(post.image_url)
-    if (!storagePath) continue
+    if (storagePath) {
+      try {
+        await bucket.file(storagePath).delete({ ignoreNotFound: true })
+      } catch (error) {
+        console.error(`Storage cleanup failed for post ${post.id}:`, error)
+      }
+    }
 
-    try {
-      await bucket.file(storagePath).delete({ ignoreNotFound: true })
-    } catch (error) {
-      console.error(`Storage cleanup failed for post ${post.id}:`, error)
+    // Create notification for post owner (if not anonymous)
+    if (!post.is_anonymous && post.user_id) {
+      await createNotification(post.user_id, NOTIFICATION_TYPES.POST_EXPIRED, {
+        post_id: post.id,
+        overlay_text: post.overlay_text || 'Your post'
+      })
     }
   }
 
@@ -1125,13 +1253,15 @@ app.post('/api/posts/:id/like', requireFirebaseAuth, async (req, res) => {
 
     // Check if post exists and is active
     const postRows = await sql`
-      SELECT id
+      SELECT id, user_id
       FROM posts
       WHERE id = ${postId}
         AND is_deleted = FALSE
         AND created_at >= NOW() - ${POST_TTL_INTERVAL}::interval
     `
     if (!postRows.length) return res.status(404).json({ success: false, error: 'Post not found' })
+
+    const postOwnerId = postRows[0].user_id
 
     // Check for existing like
     const existing = await sql`
@@ -1145,6 +1275,21 @@ app.post('/api/posts/:id/like', requireFirebaseAuth, async (req, res) => {
     } else {
       await sql`INSERT INTO post_likes (post_id, user_id) VALUES (${postId}, ${userId})`
       liked = true
+
+      // Create notification for post owner (if not liking own post)
+      if (userId !== postOwnerId) {
+        const likerInfo = await sql`
+          SELECT name, avatar_url FROM users WHERE user_id = ${userId}
+        `
+        if (likerInfo.length > 0) {
+          await createNotification(postOwnerId, NOTIFICATION_TYPES.POST_LIKED, {
+            post_id: postId,
+            liker_user_id: userId,
+            liker_name: likerInfo[0].name || 'Someone',
+            liker_avatar_url: likerInfo[0].avatar_url || null
+          })
+        }
+      }
     }
 
     // Get updated like count
@@ -1221,9 +1366,6 @@ app.get('/api/debug/db-status', async (req, res) => {
   }
 })
 
-//app.listen(3000, '0.0.0.0', () => {
-//  console.log("Server running on http://0.0.0.0:3000");
-//});
 
 cleanupExpiredPosts().catch((error) => {
   console.error('Initial expired-post cleanup failed:', error)
