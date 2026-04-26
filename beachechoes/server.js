@@ -667,6 +667,37 @@ app.get("/api/leaderboard", async (req, res) => {
 // -------------------- POSTS (MAP MVP) --------------------
 const POST_TTL_INTERVAL = '1 day'
 const EXPIRED_POST_CLEANUP_INTERVAL_MS = 15 * 60 * 1000
+let postsHasAnonymousColumn = null
+
+async function ensurePostsAnonymousColumnKnown() {
+  if (postsHasAnonymousColumn !== null) return postsHasAnonymousColumn
+
+  const rows = await sql`
+    SELECT EXISTS (
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_name = 'posts'
+        AND column_name = 'is_anonymous'
+    ) AS has_column
+  `
+  postsHasAnonymousColumn = !!rows?.[0]?.has_column
+  return postsHasAnonymousColumn
+}
+
+function getDatabaseUrlSummary() {
+  const raw = process.env.DATABASE_URL || ''
+  if (!raw) return { configured: false }
+  try {
+    const parsed = new URL(raw)
+    return {
+      configured: true,
+      host: parsed.host,
+      database: parsed.pathname?.replace(/^\//, '') || null,
+    }
+  } catch {
+    return { configured: true, parseError: true }
+  }
+}
 
 function getStoragePathFromPublicUrl(imageUrl) {
   if (!imageUrl || typeof imageUrl !== 'string') return null
@@ -719,7 +750,15 @@ app.post('/api/posts', requireFirebaseAuth, async (req, res) => {
     const userId = await resolveUserId(req.firebase.uid)
     if (!userId) return res.status(404).json({ success: false, error: 'User not found' })
 
-    const { imageBase64, overlayText = '', category = DEFAULT_POST_CATEGORY, mapX, mapY, contentType = 'image/jpeg' } = req.body
+    const {
+      imageBase64,
+      overlayText = '',
+      category = DEFAULT_POST_CATEGORY,
+      isAnonymous = false,
+      mapX,
+      mapY,
+      contentType = 'image/jpeg',
+    } = req.body
 
     if (!imageBase64) return res.status(400).json({ success: false, error: 'imageBase64 is required' })
 
@@ -731,6 +770,7 @@ app.post('/api/posts', requireFirebaseAuth, async (req, res) => {
 
     const x = parseFloat(mapX)
     const y = parseFloat(mapY)
+    const anonymous = Boolean(isAnonymous)
     if (isNaN(x) || isNaN(y) || x < 0 || x > 1 || y < 0 || y > 1) {
       return res.status(400).json({ success: false, error: 'map_x and map_y must be between 0 and 1' })
     }
@@ -744,25 +784,61 @@ app.post('/api/posts', requireFirebaseAuth, async (req, res) => {
     const file = bucket.file(fileName)
     await file.save(imageBuffer, { metadata: { contentType }, public: true })
     const imageUrl = `https://storage.googleapis.com/${bucket.name}/${fileName}`
+    const hasAnonymousColumn = await ensurePostsAnonymousColumnKnown()
 
-    const result = await sql`
-      INSERT INTO posts (user_id, image_url, overlay_text, category, map_x, map_y)
-      VALUES (${userId}, ${imageUrl}, ${text}, ${normalizedCategory}, ${x}, ${y})
-      RETURNING
-        id,
-        image_url,
-        overlay_text,
-        category,
-        map_x,
-        map_y,
-        created_at,
-        created_at + ${POST_TTL_INTERVAL}::interval AS expires_at
-    `
+    if (anonymous && !hasAnonymousColumn) {
+      return res.status(500).json({
+        success: false,
+        error: 'Database migration required: add posts.is_anonymous column before posting anonymously.',
+      })
+    }
+
+    const result = hasAnonymousColumn
+      ? await sql`
+          INSERT INTO posts (user_id, image_url, overlay_text, category, is_anonymous, map_x, map_y)
+          VALUES (${userId}, ${imageUrl}, ${text}, ${normalizedCategory}, ${anonymous}, ${x}, ${y})
+          RETURNING
+            id,
+            image_url,
+            overlay_text,
+            category,
+            is_anonymous,
+            map_x,
+            map_y,
+            created_at,
+            created_at + ${POST_TTL_INTERVAL}::interval AS expires_at
+        `
+      : await sql`
+          INSERT INTO posts (user_id, image_url, overlay_text, category, map_x, map_y)
+          VALUES (${userId}, ${imageUrl}, ${text}, ${normalizedCategory}, ${x}, ${y})
+          RETURNING
+            id,
+            image_url,
+            overlay_text,
+            category,
+            FALSE AS is_anonymous,
+            map_x,
+            map_y,
+            created_at,
+            created_at + ${POST_TTL_INTERVAL}::interval AS expires_at
+        `
 
     res.status(201).json({ success: true, post: result[0] })
   } catch (err) {
+    if (err?.code === '42703' && String(err?.message || '').includes('is_anonymous')) {
+      postsHasAnonymousColumn = false
+      return res.status(500).json({
+        success: false,
+        error: 'Database migration required: add posts.is_anonymous column and restart the server.',
+      })
+    }
     console.error('POST /api/posts error:', err)
-    res.status(500).json({ success: false, error: 'Internal server error' })
+    const details = err?.message ? String(err.message) : 'Unknown server error'
+    res.status(500).json({
+      success: false,
+      error: `Internal server error: ${details}`,
+      code: err?.code || null,
+    })
   }
 })
 
@@ -806,27 +882,52 @@ app.get('/api/posts/feed', async (req, res) => {
       }
     }
 
-    const rows = await sql`
-      SELECT
-        p.id,
-        p.image_url,
-        p.overlay_text,
-        p.created_at,
-        COALESCE(l.like_count, 0)::int AS like_count,
-        CASE WHEN ${viewerUserId}::int IS NOT NULL AND ul.user_id IS NOT NULL THEN TRUE ELSE FALSE END AS liked,
-        u.name AS username,
-        u.avatar_url AS user_avatar_url
-      FROM posts p
-      LEFT JOIN users u ON u.user_id = p.user_id
-      LEFT JOIN (
-        SELECT post_id, COUNT(*)::int AS like_count
-        FROM post_likes
-        GROUP BY post_id
-      ) l ON l.post_id = p.id
-      LEFT JOIN post_likes ul ON ul.post_id = p.id AND ul.user_id = ${viewerUserId}::int
-      WHERE p.is_deleted = FALSE
-      ORDER BY p.created_at DESC
-    `
+    const hasAnonymousColumn = await ensurePostsAnonymousColumnKnown()
+    const rows = hasAnonymousColumn
+      ? await sql`
+          SELECT
+            p.id,
+            p.image_url,
+            p.overlay_text,
+            p.created_at,
+            COALESCE(l.like_count, 0)::int AS like_count,
+            CASE WHEN ${viewerUserId}::int IS NOT NULL AND ul.user_id IS NOT NULL THEN TRUE ELSE FALSE END AS liked,
+            CASE WHEN p.is_anonymous THEN 'Anonymous' ELSE u.name END AS username,
+            CASE WHEN p.is_anonymous THEN NULL ELSE u.avatar_url END AS user_avatar_url,
+            p.is_anonymous
+          FROM posts p
+          LEFT JOIN users u ON u.user_id = p.user_id
+          LEFT JOIN (
+            SELECT post_id, COUNT(*)::int AS like_count
+            FROM post_likes
+            GROUP BY post_id
+          ) l ON l.post_id = p.id
+          LEFT JOIN post_likes ul ON ul.post_id = p.id AND ul.user_id = ${viewerUserId}::int
+          WHERE p.is_deleted = FALSE
+          ORDER BY p.created_at DESC
+        `
+      : await sql`
+          SELECT
+            p.id,
+            p.image_url,
+            p.overlay_text,
+            p.created_at,
+            COALESCE(l.like_count, 0)::int AS like_count,
+            CASE WHEN ${viewerUserId}::int IS NOT NULL AND ul.user_id IS NOT NULL THEN TRUE ELSE FALSE END AS liked,
+            u.name AS username,
+            u.avatar_url AS user_avatar_url,
+            FALSE AS is_anonymous
+          FROM posts p
+          LEFT JOIN users u ON u.user_id = p.user_id
+          LEFT JOIN (
+            SELECT post_id, COUNT(*)::int AS like_count
+            FROM post_likes
+            GROUP BY post_id
+          ) l ON l.post_id = p.id
+          LEFT JOIN post_likes ul ON ul.post_id = p.id AND ul.user_id = ${viewerUserId}::int
+          WHERE p.is_deleted = FALSE
+          ORDER BY p.created_at DESC
+        `
 
     res.json({ success: true, posts: rows })
   } catch (err) {
@@ -854,25 +955,48 @@ app.get('/api/posts/user/:userId', async (req, res) => {
       }
     }
 
-    const rows = await sql`
-      SELECT
-        p.id,
-        p.image_url,
-        p.overlay_text,
-        p.created_at,
-        COALESCE(l.like_count, 0)::int AS like_count,
-        CASE WHEN ${viewerUserId}::int IS NOT NULL AND ul.user_id IS NOT NULL THEN TRUE ELSE FALSE END AS liked
-      FROM posts p
-      LEFT JOIN (
-        SELECT post_id, COUNT(*)::int AS like_count
-        FROM post_likes
-        GROUP BY post_id
-      ) l ON l.post_id = p.id
-      LEFT JOIN post_likes ul ON ul.post_id = p.id AND ul.user_id = ${viewerUserId}::int
-      WHERE p.user_id = ${userId}
-        AND p.is_deleted = FALSE
-      ORDER BY p.created_at DESC
-    `
+    const hasAnonymousColumn = await ensurePostsAnonymousColumnKnown()
+    const rows = hasAnonymousColumn
+      ? await sql`
+          SELECT
+            p.id,
+            p.image_url,
+            p.overlay_text,
+            p.is_anonymous,
+            p.created_at,
+            COALESCE(l.like_count, 0)::int AS like_count,
+            CASE WHEN ${viewerUserId}::int IS NOT NULL AND ul.user_id IS NOT NULL THEN TRUE ELSE FALSE END AS liked
+          FROM posts p
+          LEFT JOIN (
+            SELECT post_id, COUNT(*)::int AS like_count
+            FROM post_likes
+            GROUP BY post_id
+          ) l ON l.post_id = p.id
+          LEFT JOIN post_likes ul ON ul.post_id = p.id AND ul.user_id = ${viewerUserId}::int
+          WHERE p.user_id = ${userId}
+            AND p.is_deleted = FALSE
+          ORDER BY p.created_at DESC
+        `
+      : await sql`
+          SELECT
+            p.id,
+            p.image_url,
+            p.overlay_text,
+            FALSE AS is_anonymous,
+            p.created_at,
+            COALESCE(l.like_count, 0)::int AS like_count,
+            CASE WHEN ${viewerUserId}::int IS NOT NULL AND ul.user_id IS NOT NULL THEN TRUE ELSE FALSE END AS liked
+          FROM posts p
+          LEFT JOIN (
+            SELECT post_id, COUNT(*)::int AS like_count
+            FROM post_likes
+            GROUP BY post_id
+          ) l ON l.post_id = p.id
+          LEFT JOIN post_likes ul ON ul.post_id = p.id AND ul.user_id = ${viewerUserId}::int
+          WHERE p.user_id = ${userId}
+            AND p.is_deleted = FALSE
+          ORDER BY p.created_at DESC
+        `
 
     res.json({ success: true, posts: rows })
   } catch (err) {
@@ -892,28 +1016,60 @@ app.get('/api/posts/detail', async (req, res) => {
 
     if (!ids.length) return res.status(400).json({ success: false, error: 'ids are required' })
 
-    const rows = await sql`
-      SELECT
-        p.id,
-        p.image_url,
-        p.overlay_text,
-        p.category,
-        p.map_x,
-        p.map_y,
-        p.created_at,
-        p.created_at + ${POST_TTL_INTERVAL}::interval AS expires_at,
-        COALESCE(l.like_count, 0)::int AS like_count
-      FROM posts p
-      LEFT JOIN (
-        SELECT post_id, COUNT(*)::int AS like_count
-        FROM post_likes
-        GROUP BY post_id
-      ) l ON l.post_id = p.id
-      WHERE p.id = ANY(${ids})
-        AND p.is_deleted = FALSE
-        AND p.created_at >= NOW() - ${POST_TTL_INTERVAL}::interval
-      ORDER BY p.created_at DESC
-    `
+    const hasAnonymousColumn = await ensurePostsAnonymousColumnKnown()
+    const rows = hasAnonymousColumn
+      ? await sql`
+          SELECT
+            p.id,
+            p.image_url,
+            p.overlay_text,
+            p.category,
+            p.is_anonymous,
+            p.map_x,
+            p.map_y,
+            p.created_at,
+            p.created_at + ${POST_TTL_INTERVAL}::interval AS expires_at,
+            COALESCE(l.like_count, 0)::int AS like_count,
+            CASE WHEN p.is_anonymous THEN 'Anonymous' ELSE u.name END AS username,
+            u.firebase_uid AS owner_firebase_uid
+          FROM posts p
+          LEFT JOIN users u ON u.user_id = p.user_id
+          LEFT JOIN (
+            SELECT post_id, COUNT(*)::int AS like_count
+            FROM post_likes
+            GROUP BY post_id
+          ) l ON l.post_id = p.id
+          WHERE p.id = ANY(${ids})
+            AND p.is_deleted = FALSE
+            AND p.created_at >= NOW() - ${POST_TTL_INTERVAL}::interval
+          ORDER BY p.created_at DESC
+        `
+      : await sql`
+          SELECT
+            p.id,
+            p.image_url,
+            p.overlay_text,
+            p.category,
+            FALSE AS is_anonymous,
+            p.map_x,
+            p.map_y,
+            p.created_at,
+            p.created_at + ${POST_TTL_INTERVAL}::interval AS expires_at,
+            COALESCE(l.like_count, 0)::int AS like_count,
+            u.name AS username,
+            u.firebase_uid AS owner_firebase_uid
+          FROM posts p
+          LEFT JOIN users u ON u.user_id = p.user_id
+          LEFT JOIN (
+            SELECT post_id, COUNT(*)::int AS like_count
+            FROM post_likes
+            GROUP BY post_id
+          ) l ON l.post_id = p.id
+          WHERE p.id = ANY(${ids})
+            AND p.is_deleted = FALSE
+            AND p.created_at >= NOW() - ${POST_TTL_INTERVAL}::interval
+          ORDER BY p.created_at DESC
+        `
     res.json({ success: true, posts: rows })
   } catch (err) {
     console.error('GET /api/posts/detail error:', err)
@@ -1024,6 +1180,23 @@ app.post('/api/posts/:id/report', requireFirebaseAuth, async (req, res) => {
 
 // -------------------- END POSTS --------------------
 
+app.get('/api/debug/db-status', async (req, res) => {
+  try {
+    const dbSummary = getDatabaseUrlSummary()
+    const currentDb = await sql`SELECT current_database() AS current_database`
+    const hasAnonymousColumn = await ensurePostsAnonymousColumnKnown()
+    res.json({
+      success: true,
+      database_url: dbSummary,
+      current_database: currentDb?.[0]?.current_database ?? null,
+      posts_has_is_anonymous: hasAnonymousColumn,
+    })
+  } catch (err) {
+    console.error('GET /api/debug/db-status error:', err)
+    res.status(500).json({ success: false, error: 'Internal server error' })
+  }
+})
+
 //app.listen(3000, '0.0.0.0', () => {
 //  console.log("Server running on http://0.0.0.0:3000");
 //});
@@ -1038,4 +1211,19 @@ setInterval(() => {
   })
 }, EXPIRED_POST_CLEANUP_INTERVAL_MS)
 
-app.listen(3000, () => console.log('Server running on http://localhost:3000'))
+app.listen(3000, async () => {
+  console.log('Server running on http://localhost:3000')
+  try {
+    const dbSummary = getDatabaseUrlSummary()
+    const currentDb = await sql`SELECT current_database() AS current_database`
+    const hasAnonymousColumn = await ensurePostsAnonymousColumnKnown()
+    console.log('DB status:', {
+      host: dbSummary.host || null,
+      databaseFromUrl: dbSummary.database || null,
+      currentDatabase: currentDb?.[0]?.current_database ?? null,
+      postsHasIsAnonymous: hasAnonymousColumn,
+    })
+  } catch (error) {
+    console.error('DB status check failed on startup:', error)
+  }
+})

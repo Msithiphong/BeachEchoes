@@ -59,9 +59,13 @@ export default function PostDetail() {
     const isOwner = user?.uid && item.owner_firebase_uid === user.uid;
     const createdLabel = formatDateTime(item.created_at);
     const expiresLabel = formatDateTime(item.expires_at);
+    const usernameLabel = item.username || 'Anonymous';
 
     return (
       <View style={styles.card}>
+        <View style={styles.authorRow}>
+          <Text style={styles.authorLabel}>Posted by {usernameLabel}</Text>
+        </View>
         <View style={styles.cardTopMeta}>
           <View style={styles.categoryBadge}>
             <Text style={styles.categoryBadgeText}>{item.category || 'Tips'}</Text>
@@ -185,9 +189,18 @@ const styles = StyleSheet.create({
     shadowRadius: 7,
   },
   image: { borderRadius: 0 },
-  cardTopMeta: {
+  authorRow: {
     paddingHorizontal: 14,
     paddingTop: 12,
+  },
+  authorLabel: {
+    fontSize: 13,
+    color: '#0f172a',
+    fontWeight: '700',
+  },
+  cardTopMeta: {
+    paddingHorizontal: 14,
+    paddingTop: 8,
     paddingBottom: 10,
     flexDirection: 'row',
     alignItems: 'center',

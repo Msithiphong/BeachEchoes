@@ -11,11 +11,12 @@ import { API_BASE } from '../config/api';
  * @param {string} draft.localImageUri - local file URI from expo-camera
  * @param {string} draft.overlayText   - caption text (may be empty)
  * @param {string} draft.category      - selected category label
+ * @param {boolean} draft.isAnonymous  - true if post should hide author identity
  * @param {number} draft.mapX          - normalized x coordinate [0,1]
  * @param {number} draft.mapY          - normalized y coordinate [0,1]
  * @returns {Promise<{ id: number, image_url: string }>} the created post
  */
-export async function publishPost({ localImageUri, overlayText, category, mapX, mapY }) {
+export async function publishPost({ localImageUri, overlayText, category, isAnonymous, mapX, mapY }) {
   const token = await auth.currentUser?.getIdToken();
   if (!token) throw new Error('User not authenticated');
 
@@ -40,6 +41,7 @@ export async function publishPost({ localImageUri, overlayText, category, mapX, 
             contentType: blob.type || 'image/jpeg',
             overlayText: overlayText || '',
             category,
+            isAnonymous: !!isAnonymous,
             mapX,
             mapY,
           }),

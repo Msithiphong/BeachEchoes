@@ -4,6 +4,7 @@ import {
   TextInput,
   TouchableOpacity,
   Text,
+  Switch,
   StyleSheet,
   KeyboardAvoidingView,
   Platform,
@@ -19,7 +20,17 @@ const MAX_OVERLAY_LENGTH = 2000;
 
 export default function EditPost() {
   const router = useRouter();
-  const { localImageUri, overlayText, setOverlayText, category, setCategory, capturedAt, clearDraft } = useDraftPost();
+  const {
+    localImageUri,
+    overlayText,
+    setOverlayText,
+    category,
+    setCategory,
+    isAnonymous,
+    setIsAnonymous,
+    capturedAt,
+    clearDraft,
+  } = useDraftPost();
 
   const [text, setText] = useState(overlayText);
   const [selectedCategory, setSelectedCategory] = useState(category || DEFAULT_POST_CATEGORY);
@@ -132,6 +143,13 @@ export default function EditPost() {
                 maxLength={MAX_OVERLAY_LENGTH}
               />
             </View>
+            <View style={styles.toggleRow}>
+              <View style={styles.toggleTextWrap}>
+                <Text style={styles.toggleTitle}>Post anonymously</Text>
+                <Text style={styles.toggleSubtitle}>Show this echo as posted by Anonymous.</Text>
+              </View>
+              <Switch value={isAnonymous} onValueChange={setIsAnonymous} />
+            </View>
           </View>
 
           <View style={styles.actions}>
@@ -223,6 +241,19 @@ const styles = StyleSheet.create({
   categoryOptionText: { fontSize: 15, color: '#0f172a' },
   categoryOptionTextActive: { color: '#145ea8', fontWeight: '700' },
   inputRow: { marginBottom: 2 },
+  toggleRow: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#e2e8f0',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  toggleTextWrap: { flex: 1 },
+  toggleTitle: { fontSize: 14, fontWeight: '700', color: '#1e293b' },
+  toggleSubtitle: { marginTop: 2, fontSize: 12, color: '#64748b' },
   inputTopRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
   inputLabel: { fontSize: 13, fontWeight: '700', color: '#334155' },
   input: {

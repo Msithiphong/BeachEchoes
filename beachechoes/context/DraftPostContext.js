@@ -6,6 +6,7 @@ const DraftPostContext = createContext(null);
 export function DraftPostProvider({ children }) {
   const [localImageUri, setLocalImageUri] = useState(null);
   const [overlayText, setOverlayText] = useState('');
+  const [isAnonymous, setIsAnonymous] = useState(false);
   const [mapX, setMapX] = useState(null);
   const [mapY, setMapY] = useState(null);
   const [capturedAt, setCapturedAt] = useState(null);
@@ -14,6 +15,7 @@ export function DraftPostProvider({ children }) {
   function clearDraft() {
     setLocalImageUri(null);
     setOverlayText('');
+    setIsAnonymous(false);
     setMapX(null);
     setMapY(null);
     setCapturedAt(null);
@@ -27,6 +29,8 @@ export function DraftPostProvider({ children }) {
         setLocalImageUri,
         overlayText,
         setOverlayText,
+        isAnonymous,
+        setIsAnonymous,
         mapX,
         setMapX,
         mapY,
