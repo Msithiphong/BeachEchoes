@@ -97,6 +97,16 @@ export default function Profile() {
     }
   }
 
+  const handleLikeToggle = (postId, liked, likeCount) => {
+    setPosts(prevPosts => 
+      prevPosts.map(post => 
+        post.id === postId 
+          ? { ...post, liked, like_count: likeCount }
+          : post
+      )
+    )
+  }
+
   const saveProfile = async () => {
     try {
       setSaving(true)
@@ -346,9 +356,12 @@ export default function Profile() {
             posts.map((post) => (
               <ImageCard
                 key={post.id}
+                postId={post.id}
                 image={{ uri: post.image_url }}
                 username={name || user?.email}
                 likeCount={post.like_count}
+                initialLiked={post.liked}
+                onLikeToggle={handleLikeToggle}
               >
                 {post.overlay_text}
               </ImageCard>

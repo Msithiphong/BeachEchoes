@@ -61,7 +61,7 @@ export default function Leaderboard() {
 
   // view controls which leaderboard you fetch:
   // - 'users' => backend returns user leaderboard rows
-  // - 'messages' => backend returns message leaderboard rows
+  // - 'posts' => backend returns post leaderboard rows
   const [view, setView] = useState('users')
 
   // period controls time window for ranking:
@@ -79,7 +79,7 @@ export default function Leaderboard() {
 
   // rows holds the raw leaderboard rows from the backend:
   // - when view === 'users': { name, total_upvotes, avatar_url, rank? }
-  // - when view === 'messages': { message, upvotes, author: { name, avatar_url }, rank? }
+  // - when view === 'posts': { message, upvotes, author: { name, avatar_url }, rank? }
   const [rows, setRows] = useState([])
 
   // stats is a small “summary row” UI (messages/upvotes/comments)
@@ -164,7 +164,7 @@ export default function Leaderboard() {
           comments: 0,
         })
       } else {
-        // upvotes exists on message rows
+        // upvotes exists on post rows
         const totalUpvotes = data.reduce((sum, r) => sum + Number(r.upvotes ?? 0), 0)
         setStats({
           echoes: data.length,
@@ -284,14 +284,14 @@ export default function Leaderboard() {
             {/* Simple spacing between the two segmented rows */}
             <View style={{ height: 10 }} />
 
-            {/* View toggle (Top Users / Top Messages) */}
+            {/* View toggle (Top Users / Top Posts) */}
             <SegmentedButtons
               value={view}
               // Update `view` state => triggers reload
               onValueChange={(v) => setView(v)}
               buttons={[
                 { value: 'users', label: 'Top Users' },
-                { value: 'messages', label: 'Top Messages' },
+                { value: 'posts', label: 'Top Posts' },
               ]}
               style={styles.segmented}
             />
@@ -319,7 +319,7 @@ export default function Leaderboard() {
           <Surface style={styles.topCard} elevation={0}>
             {/* Label changes depending on selected view */}
             <Text style={styles.topSectionLabel}>
-              {view === 'users' ? 'Top User' : 'Top Message'}
+              {view === 'users' ? 'Top User' : 'Top Post'}
             </Text>
 
             {/* Avatar + medal row */}
@@ -337,7 +337,7 @@ export default function Leaderboard() {
             <View style={styles.topTextBlock}>
               {/* Display name:
                   - users: item.name
-                  - messages: item.author.name
+                  - posts: item.author.name
               */}
               <Text style={styles.topName} numberOfLines={1}>
                 {view === 'users' ? topItem?.name ?? '—' : topItem?.author?.name ?? '—'}
@@ -352,8 +352,8 @@ export default function Leaderboard() {
                 </Text>
               </View>
 
-              {/* Only show message preview if we’re in messages view */}
-              {view === 'messages' && (
+              {/* Only show message preview if we're in posts view */}
+              {view === 'posts' && (
                 <Text style={styles.topPreview} numberOfLines={3}>
                   {topItem?.message ?? '—'}
                 </Text>
@@ -365,7 +365,7 @@ export default function Leaderboard() {
               LIST SECTION (starts at #2)
              ---------------------------- */}
           <Text style={styles.sectionTitle}>
-            {view === 'users' ? 'Leaderboard Users' : 'Leaderboard Messages'}
+            {view === 'users' ? 'Leaderboard Users' : 'Leaderboard Posts'}
           </Text>
 
           <View style={styles.listWrap}>
@@ -380,12 +380,12 @@ export default function Leaderboard() {
 
               // Card title:
               // - users: r.name
-              // - messages: r.message
+              // - posts: r.message
               const title = view === 'users' ? r.name ?? 'Unknown User' : r.message ?? 'Unknown Message'
 
               // Card subtitle:
               // - users: show votes total_upvotes
-              // - messages: show author + votes
+              // - posts: show author + votes
               const subtitle =
                 view === 'users'
                   ? `Votes: ${String(r.total_upvotes ?? 0)}`
@@ -409,7 +409,7 @@ export default function Leaderboard() {
                     <View style={styles.itemTextCol}>
                       {/* Title lines:
                           - users: 1 line (names should be short)
-                          - messages: allow 2 lines
+                          - posts: allow 2 lines
                       */}
                       <Text style={styles.itemTitle} numberOfLines={view === 'users' ? 1 : 2}>
                         {title}
@@ -419,8 +419,8 @@ export default function Leaderboard() {
                         {subtitle}
                       </Text>
 
-                      {/* Extra preview line only for messages */}
-                      {view === 'messages' && (
+                      {/* Extra preview line only for posts */}
+                      {view === 'posts' && (
                         <Text style={styles.itemPreview} numberOfLines={3}>
                           {String(r.message ?? '')}
                         </Text>
@@ -461,7 +461,7 @@ function Stat({ label, value }) {
  *
  * Note: view determines where avatar lives:
  * - users: item.avatar_url
- * - messages: item.author.avatar_url
+ * - posts: item.author.avatar_url
  */
 function renderAvatar(item, view) {
   // If topItem is missing (no rows), show a default placeholder
@@ -479,7 +479,7 @@ function renderAvatar(item, view) {
 
   // If no image, use initial:
   // - users: initial from item.name
-  // - messages: initial from item.author.name
+  // - posts: initial from item.author.name
   const label = view === 'users' ? topInitial(item.name) : topInitial(item.author?.name)
 
   return <Avatar.Text size={92} label={label} style={styles.avatarPlaceholder} />

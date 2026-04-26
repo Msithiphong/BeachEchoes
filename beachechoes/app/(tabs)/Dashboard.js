@@ -84,6 +84,20 @@ export default function Dashboard() {
     }
   }, [user])
 
+  /**
+   * Handle like toggle from ImageCard
+   * Updates the post state with new like count and status
+   */
+  const handleLikeToggle = (postId, liked, likeCount) => {
+    setPosts(prevPosts => 
+      prevPosts.map(post => 
+        post.id === postId 
+          ? { ...post, liked, like_count: likeCount }
+          : post
+      )
+    )
+  }
+
   // Loading state: show spinner while checking authentication
   if (loading) {
     return (
@@ -131,9 +145,12 @@ export default function Dashboard() {
               posts.map((post) => (
                 <ImageCard
                   key={post.id}
+                  postId={post.id}
                   image={{ uri: post.image_url }}
                   username={post.username || 'Anonymous'}
                   likeCount={post.like_count}
+                  initialLiked={post.liked}
+                  onLikeToggle={handleLikeToggle}
                 >
                   {post.overlay_text}
                 </ImageCard>

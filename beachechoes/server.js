@@ -493,10 +493,10 @@ app.get('/api/friendships/followers/:firebaseUid', async (req, res) => {
   }
 })
 
-// -------------------- LEADERBOARD (MESSAGES + UPVOTES ONLY) --------------------
+// -------------------- LEADERBOARD (POSTS + LIKES) --------------------
 
 const ALLOWED_PERIODS = { day: "1 day", week: "7 days", month: "30 days", all: null };
-const ALLOWED_VIEWS = new Set(["users", "messages"]);
+const ALLOWED_VIEWS = new Set(["users", "posts"]);
 
 function normPeriod(p) {
   const v = String(p ?? "week").toLowerCase();
@@ -531,13 +531,13 @@ function buildPeriodFilter(period, col, startIndex = 1) {
 }
 
 // -------------------- USERS LEADERBOARD --------------------
-// Top Users = SUM of upvotes across their messages
+// Top Users = COUNT of likes across their non-anonymous, non-deleted posts
 async function queryUserLeaderboard({ period, limit }) {
   const params = [];
   let paramIndex = 1;
 
   // IMPORTANT: for LEFT JOIN, put time filter in JOIN condition
-  const pf = buildPeriodFilter(period, "m.created_at", paramIndex);
+  const pf = buildPeriodFilter(period, "p.created_at", paramIndex);
   params.push(...pf.params);
   paramIndex = pf.nextIndex;
 
@@ -554,20 +554,25 @@ async function queryUserLeaderboard({ period, limit }) {
       u.bio,
       u.avatar_url,
 
-      COALESCE(SUM(COALESCE(m.upvote, 0)), 0)::int AS total_upvotes,
+      COALESCE(COUNT(pl.user_id), 0)::int AS total_upvotes,
 
       ROW_NUMBER() OVER (
         ORDER BY
-          COALESCE(SUM(COALESCE(m.upvote, 0)), 0) DESC,
+          COALESCE(COUNT(pl.user_id), 0) DESC,
           u.user_id ASC
       ) AS rank
 
     FROM users u
-    LEFT JOIN messages m
-      ON m.user_id = u.user_id
+    LEFT JOIN posts p
+      ON p.user_id = u.user_id
+      AND p.is_deleted = FALSE
+      AND p.is_anonymous = FALSE
       ${joinPeriodSql}
+    LEFT JOIN post_likes pl
+      ON pl.post_id = p.id
 
     GROUP BY u.user_id, u.name, u.bio, u.avatar_url
+    HAVING COALESCE(COUNT(pl.user_id), 0) >= 1
     ORDER BY rank
     LIMIT $${limitParam};
   `;
@@ -584,28 +589,28 @@ async function queryUserLeaderboard({ period, limit }) {
   }));
 }
 
-// -------------------- MESSAGES LEADERBOARD --------------------
-// Top Messages = messages ordered by upvotes, tie-break by message id
-async function queryMessageLeaderboard({ period, limit }) {
+// -------------------- POSTS LEADERBOARD --------------------
+// Top Posts = posts ordered by like count, tie-break by post id
+async function queryPostLeaderboard({ period, limit }) {
   const params = [];
   let paramIndex = 1;
 
-  // For messages view, WHERE filter is correct (no LEFT JOIN needed)
-  const pf = buildPeriodFilter(period, "m.created_at", paramIndex);
+  // For posts view, WHERE filter is correct (no LEFT JOIN needed)
+  const pf = buildPeriodFilter(period, "p.created_at", paramIndex);
   params.push(...pf.params);
   paramIndex = pf.nextIndex;
 
   params.push(limit);
   const limitParam = paramIndex;
 
-  const whereSql = pf.sql ? `WHERE ${pf.sql}` : "";
+  const whereSql = pf.sql ? `AND ${pf.sql}` : "";
 
   const q = `
     SELECT
-      m.id,
-      m.message,
-      m.created_at,
-      COALESCE(m.upvote, 0)::int AS upvotes,
+      p.id,
+      p.overlay_text,
+      p.created_at,
+      COALESCE(l.like_count, 0)::int AS upvotes,
 
       u.user_id AS author_user_id,
       u.name AS author_name,
@@ -614,14 +619,22 @@ async function queryMessageLeaderboard({ period, limit }) {
 
       ROW_NUMBER() OVER (
         ORDER BY
-          COALESCE(m.upvote, 0) DESC,
-          m.id ASC
+          COALESCE(l.like_count, 0) DESC,
+          p.id ASC
       ) AS rank
 
-    FROM messages m
+    FROM posts p
     JOIN users u
-      ON u.user_id = m.user_id
-    ${whereSql}
+      ON u.user_id = p.user_id
+    LEFT JOIN (
+      SELECT post_id, COUNT(*)::int AS like_count
+      FROM post_likes
+      GROUP BY post_id
+    ) l ON l.post_id = p.id
+    WHERE p.is_deleted = FALSE
+      AND p.is_anonymous = FALSE
+      AND COALESCE(l.like_count, 0) >= 1
+      ${whereSql}
     ORDER BY rank
     LIMIT $${limitParam};
   `;
@@ -631,7 +644,7 @@ async function queryMessageLeaderboard({ period, limit }) {
   return rows.map((r) => ({
     rank: Number(r.rank),
     id: Number(r.id),
-    message: r.message,
+    message: r.overlay_text,
     created_at: r.created_at,
     upvotes: Number(r.upvotes),
     author: {
@@ -643,7 +656,7 @@ async function queryMessageLeaderboard({ period, limit }) {
   }));
 }
 
-// GET /api/leaderboard?view=users|messages&period=day|week|month|all&limit=20
+// GET /api/leaderboard?view=users|posts&period=day|week|month|all&limit=20
 app.get("/api/leaderboard", async (req, res) => {
   try {
     const view = normView(req.query.view);
@@ -653,7 +666,7 @@ app.get("/api/leaderboard", async (req, res) => {
     const data =
       view === "users"
         ? await queryUserLeaderboard({ period, limit })
-        : await queryMessageLeaderboard({ period, limit });
+        : await queryPostLeaderboard({ period, limit });
 
     res.json({ success: true, view, period, limit, data });
   } catch (err) {
@@ -1125,13 +1138,24 @@ app.post('/api/posts/:id/like', requireFirebaseAuth, async (req, res) => {
       SELECT id FROM post_likes WHERE post_id = ${postId} AND user_id = ${userId}
     `
 
+    let liked
     if (existing.length) {
       await sql`DELETE FROM post_likes WHERE post_id = ${postId} AND user_id = ${userId}`
-      return res.json({ success: true, liked: false })
+      liked = false
+    } else {
+      await sql`INSERT INTO post_likes (post_id, user_id) VALUES (${postId}, ${userId})`
+      liked = true
     }
 
-    await sql`INSERT INTO post_likes (post_id, user_id) VALUES (${postId}, ${userId})`
-    res.json({ success: true, liked: true })
+    // Get updated like count
+    const countRows = await sql`
+      SELECT COUNT(*)::int AS like_count
+      FROM post_likes
+      WHERE post_id = ${postId}
+    `
+    const likeCount = countRows[0]?.like_count ?? 0
+
+    res.json({ success: true, liked, likeCount })
   } catch (err) {
     console.error('POST /api/posts/:id/like error:', err)
     res.status(500).json({ success: false, error: 'Internal server error' })

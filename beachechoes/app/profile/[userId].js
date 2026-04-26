@@ -98,6 +98,16 @@ export default function UserProfile() {
     }
   }
 
+  const handleLikeToggle = (postId, liked, likeCount) => {
+    setPosts(prevPosts => 
+      prevPosts.map(post => 
+        post.id === postId 
+          ? { ...post, liked, like_count: likeCount }
+          : post
+      )
+    )
+  }
+
   const fetchFriendshipStatus = async () => {
     try {
       const token = await getToken()
@@ -332,9 +342,12 @@ export default function UserProfile() {
             posts.map((post) => (
               <ImageCard
                 key={post.id}
+                postId={post.id}
                 image={{ uri: post.image_url }}
                 username={name}
                 likeCount={post.like_count}
+                initialLiked={post.liked}
+                onLikeToggle={handleLikeToggle}
               >
                 {post.overlay_text}
               </ImageCard>
