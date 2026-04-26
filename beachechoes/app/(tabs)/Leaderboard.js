@@ -89,6 +89,9 @@ export default function Leaderboard() {
   // ------------------------------------
   // Build the leaderboard URL (memoized)
   // ------------------------------------
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
   const leaderboardUrl = useMemo(() => {
     const params = new URLSearchParams({
@@ -101,11 +104,14 @@ export default function Leaderboard() {
   }, [view, period, category])
 
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
   const statsUrl = useMemo(() => {
     const params = new URLSearchParams({ period, category })
     return `${API_BASE}/api/stats?${params.toString()}`
   }, [period, category])
 =======
+=======
+>>>>>>> Stashed changes
     return `${API_BASE}/leaderboard?${params.toString()}`
   }, [view, period])
 >>>>>>> Stashed changes
@@ -115,12 +121,15 @@ export default function Leaderboard() {
     setError('')
     try {
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
       const [lbRes, stRes] = await Promise.all([
         fetch(leaderboardUrl),
         fetch(statsUrl),
       ])
 
 =======
+=======
+>>>>>>> Stashed changes
       const lbRes = await fetch(leaderboardUrl)
 
       if (!lbRes.ok) {
@@ -128,14 +137,20 @@ export default function Leaderboard() {
         throw new Error(`Leaderboard HTTP ${lbRes.status}: ${t}`)
       }
 
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
       const lb = await lbRes.json()
       const st = await stRes.json()
 
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
       setRows(Array.isArray(lb) ? lb : [])
       setStats(st || { echoes: 0, appraises: 0, comments: 0 })
 =======
+=======
+>>>>>>> Stashed changes
       if (!lb || lb.success !== true) {
         throw new Error(lb?.error || 'Leaderboard response was not success=true')
       }
@@ -199,6 +214,7 @@ export default function Leaderboard() {
       <Stack.Screen options={{ title: 'Leaderboard' }} />
 
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
       <ScrollView contentContainerStyle={styles.container}>
 
         {/* TOP BAR */}
@@ -242,6 +258,8 @@ export default function Leaderboard() {
           />
         </Surface>
 =======
+=======
+>>>>>>> Stashed changes
       <View
         style={[
           styles.shiftWrap,
@@ -379,6 +397,9 @@ export default function Leaderboard() {
             <Stat label="Comments" value={stats.comments} />
           </View>
           */}
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
 
         {/* STATS */}
@@ -598,6 +619,9 @@ export default function Leaderboard() {
 // ----------------------------
 // Small reusable stat component
 // ----------------------------
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
 function Stat({ label, value }) {
   return (
@@ -623,11 +647,14 @@ function renderAvatar(item, view) {
   }
 
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
   const url =
     (view === 'users'
       ? (item.avatarUrl || item.profilePic || item.profile_image)
       : (item.authorAvatarUrl || item.avatarUrl)) || null
 =======
+=======
+>>>>>>> Stashed changes
   const url = view === 'users' ? item.avatar_url ?? null : item.author?.avatar_url ?? null
 >>>>>>> Stashed changes
 
@@ -642,11 +669,14 @@ function renderAvatar(item, view) {
   }
 
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
   const label =
     view === 'users'
       ? topInitial(item.email)
       : topInitial(item.author)
 =======
+=======
+>>>>>>> Stashed changes
   const label = view === 'users' ? topInitial(item.name) : topInitial(item.author?.name)
 >>>>>>> Stashed changes
 
@@ -670,6 +700,7 @@ function renderMedal(rank, size = 24) {
   if (!source) return null
 
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
   return (
     <Image
       source={source}
@@ -682,6 +713,8 @@ const styles = StyleSheet.create({
   container: {
     padding: 16,
 =======
+=======
+>>>>>>> Stashed changes
   return <Image source={source} style={{ width: size, height: size, resizeMode: 'contain' }} />
 }
 
@@ -724,7 +757,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 14,
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
     backgroundColor: 'rgba(255,255,255,0.06)',
+=======
+    backgroundColor: 'rgba(0,0,0,0.35)',
+>>>>>>> Stashed changes
 =======
     backgroundColor: 'rgba(0,0,0,0.35)',
 >>>>>>> Stashed changes
@@ -733,6 +770,7 @@ const styles = StyleSheet.create({
     marginRight: -6,
   },
   refreshBtn: {
+<<<<<<< Updated upstream
 <<<<<<< Updated upstream
     width: 92,
   },
@@ -745,17 +783,31 @@ const styles = StyleSheet.create({
     width: 120,
   },
   headerTitle: {
+=======
+    // CHANGED from the GitHub version:
+    // - wider button to fit the contained button style better
+    width: 120,
+  },
+  headerTitle: {
+>>>>>>> Stashed changes
     // CHANGED from the GitHub version:
     // - larger title text for stronger emphasis
     color: '#000',
     fontSize: 32,
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
     fontWeight: 'bold',
     marginLeft: 6,
   },
   headerSpacer: {
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
     width: 92,
+=======
+    width: 20,
+>>>>>>> Stashed changes
 =======
     width: 20,
 >>>>>>> Stashed changes
@@ -773,9 +825,12 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
   segmented: {
     borderRadius: 12,
 =======
+=======
+>>>>>>> Stashed changes
 
   // ADDED for custom Pressable filter pills
   segmentRow: {
@@ -804,6 +859,9 @@ const styles = StyleSheet.create({
   },
   segmentGap: {
     height: 6,
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
   },
 
@@ -815,11 +873,14 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
   topSectionLabel: {
     color: '#bbb',
     fontSize: 12,
     marginBottom: 10,
   },
+=======
+>>>>>>> Stashed changes
 =======
 >>>>>>> Stashed changes
   topCardRow: {
@@ -846,6 +907,9 @@ const styles = StyleSheet.create({
     bottom: -4,
   },
 
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
   avatarPlaceholder: {
     backgroundColor: '#4f46e5',
@@ -891,6 +955,30 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
 
+<<<<<<< Updated upstream
+=======
+  // ADDED for top message mode:
+  // message text becomes the main bold title
+  topMessageTitle: {
+    color: '#000',
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginBottom: 4,
+    maxWidth: '95%',
+    textAlign: 'center',
+  },
+
+  // ADDED for top message mode:
+  // shows the author below the message
+  topByUser: {
+    color: '#000',
+    fontSize: 12,
+    marginBottom: 8,
+    maxWidth: '95%',
+    textAlign: 'center',
+  },
+
+>>>>>>> Stashed changes
   topVotesBubble: {
     backgroundColor: '#000',
     borderRadius: 999,
@@ -928,7 +1016,11 @@ const styles = StyleSheet.create({
   /* ----- list (no table) ----- */
   sectionTitle: {
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
     color: '#fff',
+=======
+    color: '#000',
+>>>>>>> Stashed changes
 =======
     color: '#000',
 >>>>>>> Stashed changes
@@ -947,7 +1039,11 @@ const styles = StyleSheet.create({
   itemCard: {
     borderRadius: 18,
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
     backgroundColor: 'rgba(0,0,0,0.55)',
+=======
+    backgroundColor: 'rgba(0,0,0,1)',
+>>>>>>> Stashed changes
 =======
     backgroundColor: 'rgba(0,0,0,1)',
 >>>>>>> Stashed changes
@@ -971,6 +1067,11 @@ const styles = StyleSheet.create({
   },
   rankText: {
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
+=======
+    // CHANGED from the GitHub version:
+    // - white text for readability on dark card background
+>>>>>>> Stashed changes
 =======
     // CHANGED from the GitHub version:
     // - white text for readability on dark card background
@@ -992,16 +1093,20 @@ const styles = StyleSheet.create({
     paddingLeft: 10,
   },
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
   itemTitle: {
     color: '#fff',
     fontSize: 14,
 =======
+=======
+>>>>>>> Stashed changes
 
   // ADDED / CHANGED:
   // white, larger, bold user name text
   itemName: {
     color: '#fff',
     fontSize: 16,
+<<<<<<< Updated upstream
 >>>>>>> Stashed changes
     fontWeight: 'bold',
   },
@@ -1022,11 +1127,26 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: 'bold',
   },
+=======
+    fontWeight: 'bold',
+  },
+
+  // ADDED:
+  // main message text for message leaderboard rows
+  itemMessageText: {
+    color: '#fff',
+    fontSize: 15,
+    fontWeight: 'bold',
+  },
+>>>>>>> Stashed changes
 
   // ADDED:
   // author line shown below message text
   itemByUser: {
     color: '#d1d5db',
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
     fontSize: 12,
     marginTop: 2,
