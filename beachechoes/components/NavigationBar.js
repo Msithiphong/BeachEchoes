@@ -3,8 +3,6 @@ import { BottomNavigation } from 'react-native-paper'
 import { useRouter, usePathname } from 'expo-router'
 import MaterialIcons from '@expo/vector-icons/MaterialIcons'
 
-
-
 export default function NavigationBar() {
   const router = useRouter()
   const pathname = usePathname()
@@ -12,20 +10,22 @@ export default function NavigationBar() {
   const [index, setIndex] = useState(0)
   const [routes] = useState([
     { key: 'home', title: 'Home', icon: 'home', route: '/(tabs)/Dashboard' },
-    { key: 'discover', title: 'Discover', icon: 'favorite', route: '/(tabs)/Discover'},
+    { key: 'discover', title: 'Discover', icon: 'favorite', route: '/(tabs)/Discover' },
     { key: 'post', title: 'Post', icon: 'add-circle', route: '/(tabs)/Camera' },
+    { key: 'map', title: 'Map', icon: 'map', route: '/(tabs)/Map' },
     { key: 'leaderboard', title: 'Leaderboard', icon: 'leaderboard', route: '/(tabs)/Leaderboard' },
-    { key: 'profile', title: 'Profile', icon: 'person', route: '/(tabs)/Profile'},
-    
+    { key: 'profile', title: 'Profile', icon: 'person', route: '/(tabs)/Profile' },
   ])
 
-  // Sync index with current route
   useEffect(() => {
-    const currentIndex = routes.findIndex(route => pathname.includes(route.key))
+    const currentIndex = routes.findIndex(route =>
+      pathname.toLowerCase().includes(route.key.toLowerCase())
+    )
+
     if (currentIndex !== -1 && currentIndex !== index) {
       setIndex(currentIndex)
     }
-  }, [pathname])
+  }, [pathname, routes, index])
 
   const handleTabPress = ({ route }) => {
     const newIndex = routes.findIndex(r => r.key === route.key)
@@ -33,7 +33,7 @@ export default function NavigationBar() {
     router.push(route.route)
   }
 
-  const renderIcon = ({ route, focused, color }) => {
+  const renderIcon = ({ route, color }) => {
     return <MaterialIcons name={route.icon} size={28} color={color} />
   }
 
