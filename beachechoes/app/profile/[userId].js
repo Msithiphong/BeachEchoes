@@ -30,7 +30,7 @@ export default function UserProfile() {
   const [name, setName] = useState('')
   const [bio, setBio] = useState('')
   const [avatarUrl, setAvatarUrl] = useState(null)
-  const [messages, setMessages] = useState([])
+  const [posts, setPosts] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
@@ -69,7 +69,7 @@ export default function UserProfile() {
         setFollowersCount(data.profile.followers_count ?? 0)
 
         if (data.profile.id) {
-          await fetchMessages(data.profile.id)
+          await fetchPosts(data.profile.id)
         }
       } else {
         setError(data?.error || 'Profile not found')
@@ -82,15 +82,19 @@ export default function UserProfile() {
     }
   }
 
-  const fetchMessages = async (neonUserId) => {
+  const fetchPosts = async (neonUserId) => {
     try {
-      const res = await fetch(`${API_BASE}/messages/user/${neonUserId}`)
+      // Include auth token to get liked status
+      const token = await getToken()
+      const headers = token ? { Authorization: `Bearer ${token}` } : {}
+      
+      const res = await fetch(`${API_BASE}/posts/user/${neonUserId}`, { headers })
       const data = await res.json()
       if (data?.success) {
-        setMessages(data.messages ?? [])
+        setPosts(data.posts ?? [])
       }
     } catch (err) {
-      console.log('Failed to fetch messages:', err)
+      console.log('Failed to fetch posts:', err)
     }
   }
 
@@ -324,15 +328,15 @@ export default function UserProfile() {
         {/* User's Echoes */}
         <View style={styles.messagesSection} onLayout={(e) => { echoesYRef.current = e.nativeEvent.layout.y }}>
           <Text style={styles.sectionTitle}>{name}'s Echoes</Text>
-          {messages.length > 0 ? (
-            messages.map((msg) => (
+          {posts.length > 0 ? (
+            posts.map((post) => (
               <ImageCard
-                key={msg.id}
-                image={require('../../assets/mockImages/Pyramid.jpeg')}
+                key={post.id}
+                image={{ uri: post.image_url }}
                 username={name}
-                likeCount={msg.upvote}
+                likeCount={post.like_count}
               >
-                {msg.message}
+                {post.overlay_text}
               </ImageCard>
             ))
           ) : (

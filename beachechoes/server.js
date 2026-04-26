@@ -236,9 +236,9 @@ app.get('/api/profile/:userId', async (req, res) => {
     const profile = result[0]
     const neonId = profile.id
 
-    // Echoes = total messages by this user
+    // Echoes = total posts by this user (excluding deleted)
     const echoesResult = await sql`
-      SELECT COUNT(*)::int AS count FROM messages WHERE user_id = ${neonId}
+      SELECT COUNT(*)::int AS count FROM posts WHERE user_id = ${neonId} AND is_deleted = FALSE
     `
 
     // Following = accepted requests this user sent (user_id = me)
@@ -733,6 +733,97 @@ app.get('/api/posts/map', async (req, res) => {
     res.json({ success: true, posts: rows })
   } catch (err) {
     console.error('GET /api/posts/map error:', err)
+    res.status(500).json({ success: false, error: 'Internal server error' })
+  }
+})
+
+// GET /api/posts/feed — public feed of all posts with user info and like data
+app.get('/api/posts/feed', async (req, res) => {
+  try {
+    // Get requesting user's ID for like status (optional, may be null if not authenticated)
+    let viewerUserId = null
+    const authHeader = req.headers.authorization
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      try {
+        const token = authHeader.slice(7)
+        const decodedToken = await admin.auth().verifyIdToken(token)
+        viewerUserId = await resolveUserId(decodedToken.uid)
+      } catch (err) {
+        // Viewer not authenticated, continue without like status
+      }
+    }
+
+    const rows = await sql`
+      SELECT
+        p.id,
+        p.image_url,
+        p.overlay_text,
+        p.created_at,
+        COALESCE(l.like_count, 0)::int AS like_count,
+        CASE WHEN ${viewerUserId}::int IS NOT NULL AND ul.user_id IS NOT NULL THEN TRUE ELSE FALSE END AS liked,
+        u.name AS username,
+        u.avatar_url AS user_avatar_url
+      FROM posts p
+      LEFT JOIN users u ON u.user_id = p.user_id
+      LEFT JOIN (
+        SELECT post_id, COUNT(*)::int AS like_count
+        FROM post_likes
+        GROUP BY post_id
+      ) l ON l.post_id = p.id
+      LEFT JOIN post_likes ul ON ul.post_id = p.id AND ul.user_id = ${viewerUserId}::int
+      WHERE p.is_deleted = FALSE
+      ORDER BY p.created_at DESC
+    `
+
+    res.json({ success: true, posts: rows })
+  } catch (err) {
+    console.error('GET /api/posts/feed error:', err)
+    res.status(500).json({ success: false, error: 'Internal server error' })
+  }
+})
+
+// GET /api/posts/user/:userId — fetch all posts by a user with like data
+app.get('/api/posts/user/:userId', async (req, res) => {
+  try {
+    const userId = parseInt(req.params.userId, 10)
+    if (!Number.isFinite(userId)) return res.status(400).json({ success: false, error: 'Invalid user id' })
+
+    // Get requesting user's ID for like status (optional, may be null if not authenticated)
+    let viewerUserId = null
+    const authHeader = req.headers.authorization
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      try {
+        const token = authHeader.slice(7)
+        const decodedToken = await admin.auth().verifyIdToken(token)
+        viewerUserId = await resolveUserId(decodedToken.uid)
+      } catch (err) {
+        // Viewer not authenticated, continue without like status
+      }
+    }
+
+    const rows = await sql`
+      SELECT
+        p.id,
+        p.image_url,
+        p.overlay_text,
+        p.created_at,
+        COALESCE(l.like_count, 0)::int AS like_count,
+        CASE WHEN ${viewerUserId}::int IS NOT NULL AND ul.user_id IS NOT NULL THEN TRUE ELSE FALSE END AS liked
+      FROM posts p
+      LEFT JOIN (
+        SELECT post_id, COUNT(*)::int AS like_count
+        FROM post_likes
+        GROUP BY post_id
+      ) l ON l.post_id = p.id
+      LEFT JOIN post_likes ul ON ul.post_id = p.id AND ul.user_id = ${viewerUserId}::int
+      WHERE p.user_id = ${userId}
+        AND p.is_deleted = FALSE
+      ORDER BY p.created_at DESC
+    `
+
+    res.json({ success: true, posts: rows })
+  } catch (err) {
+    console.error('GET /api/posts/user/:userId error:', err)
     res.status(500).json({ success: false, error: 'Internal server error' })
   }
 })

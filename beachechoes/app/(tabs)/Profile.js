@@ -29,7 +29,7 @@ export default function Profile() {
   const [anonymousEchoes, setAnonymousEchoes] = useState(false)
 
   const [neonUserId, setNeonUserId] = useState(null)
-  const [messages, setMessages] = useState([])
+  const [posts, setPosts] = useState([])
 
   const [echoesCount, setEchoesCount] = useState(0)
   const [followingCount, setFollowingCount] = useState(0)
@@ -67,10 +67,10 @@ export default function Profile() {
 
         setAnonymousEchoes(!!pref)
 
-        // Store neon user_id and fetch messages
+        // Store neon user_id and fetch posts
         if (data.profile.id) {
           setNeonUserId(data.profile.id)
-          await fetchMessages(data.profile.id)
+          await fetchPosts(data.profile.id)
         }
       }
     } catch (error) {
@@ -80,15 +80,19 @@ export default function Profile() {
     }
   }
 
-  const fetchMessages = async (userId) => {
+  const fetchPosts = async (userId) => {
     try {
-      const res = await fetch(`${API_BASE}/messages/user/${userId}`)
+      // Include auth token to get liked status
+      const token = await auth.currentUser?.getIdToken()
+      const headers = token ? { Authorization: `Bearer ${token}` } : {}
+      
+      const res = await fetch(`${API_BASE}/posts/user/${userId}`, { headers })
       const data = await res.json()
       if (data?.success) {
-        setMessages(data.messages ?? [])
+        setPosts(data.posts ?? [])
       }
     } catch (error) {
-      console.log('Failed to fetch messages:', error)
+      console.log('Failed to fetch posts:', error)
     }
   }
 
@@ -313,18 +317,18 @@ export default function Profile() {
           </Button>
         )}
 
-        {/* User's Messages */}
+        {/* User's Posts */}
         <View style={styles.messagesSection} onLayout={(e) => { echoesYRef.current = e.nativeEvent.layout.y }}>
           <Text style={styles.sectionTitle}>My Echoes</Text>
-          {messages.length > 0 ? (
-            messages.map((msg) => (
+          {posts.length > 0 ? (
+            posts.map((post) => (
               <ImageCard
-                key={msg.id}
-                image={require('../../assets/mockImages/Pyramid.jpeg')}
+                key={post.id}
+                image={{ uri: post.image_url }}
                 username={name || user?.email}
-                likeCount={msg.upvote}
+                likeCount={post.like_count}
               >
-                {msg.message}
+                {post.overlay_text}
               </ImageCard>
             ))
           ) : (
