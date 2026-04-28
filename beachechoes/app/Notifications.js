@@ -89,6 +89,11 @@ export default function Notifications() {
       router.push(`/PostDetail?ids=${notification.data.post_id}`)
     } else if (notification.type === 'post_expired') {
       // Just mark as read, no navigation
+    } else if (notification.type === 'new_follower') {
+      // Navigate to the follower's profile
+      if (notification.data.from_firebase_uid) {
+        router.push(`/profile/${notification.data.from_firebase_uid}`)
+      }
     }
   }
 
@@ -236,6 +241,27 @@ export default function Notifications() {
             <View style={styles.nameContainer}>
               <Text style={styles.userName}>Post Expired</Text>
               <Text style={styles.subtitle}>{item.data.overlay_text}</Text>
+              <Text style={styles.timeText}>
+                {new Date(item.created_at).toLocaleDateString()}
+              </Text>
+            </View>
+          </View>
+        )}
+
+        {/* New Follower Notification (Immutable) */}
+        {item.type === 'new_follower' && (
+          <View style={styles.userInfo}>
+            <Image
+              source={{
+                uri:
+                  item.data.from_avatar_url ||
+                  'https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png',
+              }}
+              style={styles.avatar}
+            />
+            <View style={styles.nameContainer}>
+              <Text style={styles.userName}>{item.data.from_name}</Text>
+              <Text style={styles.subtitle}>Started following you</Text>
               <Text style={styles.timeText}>
                 {new Date(item.created_at).toLocaleDateString()}
               </Text>
