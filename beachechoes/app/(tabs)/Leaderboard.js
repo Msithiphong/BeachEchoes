@@ -230,6 +230,7 @@ export default function Leaderboard() {
           {
             width: screenW,
             transform: [{ translateX: -leftOffset }],
+            marginTop: 40, // Shift all content down by 10
           },
         ]}
       >
@@ -248,16 +249,10 @@ export default function Leaderboard() {
               TOP HEADER BAR
              ---------------------------- */}
           <Surface style={styles.headerBar} elevation={0}>
-            {/* Refresh button re-fetches leaderboard */}
-            <Button mode="outlined" onPress={loadData} disabled={loading} style={styles.refreshBtn}>
-              Refresh
-            </Button>
-
-            {/* Title in center */}
-            <Text style={styles.headerTitle}>Leaderboard</Text>
-
-            {/* Spacer so title stays centered (same width as refresh button) */}
-            <View style={styles.headerSpacer} />
+            {/* Title centered */}
+            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+              <Text style={[styles.headerTitle, { textAlign: 'center', width: '100%' }]}>Leaderboard</Text>
+            </View>
           </Surface>
 
           {/* ----------------------------
@@ -301,32 +296,28 @@ export default function Leaderboard() {
              ---------------------------- */}
           <Surface style={styles.topCard} elevation={0}>
             {/* Label changes depending on selected view */}
-            <Text style={styles.topSectionLabel}>
-              {view === 'users' ? 'Top User' : 'Top Post'}
-            </Text>
+            
 
-            {/* Avatar row (no medal for Top User) */}
-            <View style={styles.topCardRow}>
-              <View style={styles.topAvatarAndMedal}>
+            {/* Avatar row (no medal for Top User or Top Post) */}
+            <View style={[styles.topCardRow, view === 'users' && { justifyContent: 'center' }]}> 
+              <View style={[styles.topAvatarAndMedal, view === 'users' && { justifyContent: 'center', width: '100%' }]}> 
                 {/* Avatar rendering depends on view + available URL */}
-                {renderAvatar(topItem, view)}
-                {/* Medal only for Top Post, not Top User */}
-                {view === 'posts' && <><View style={{ width: 10 }} />{renderMedal(1, 38)}</>}
+                <View style={{ width: '100%', alignItems: 'center', justifyContent: 'center' }}>
+                  {renderAvatar(topItem, view)}
+                </View>
+                {/* Medal removed for both Top User and Top Post */}
               </View>
             </View>
 
             {/* Main text area for the top item */}
-            <View style={styles.topTextBlock}>
-              {/* Display name:
-                  - users: item.name
-                  - posts: item.author.name
-              */}
-              <Text style={styles.topName} numberOfLines={1}>
+            <View style={[styles.topTextBlock, view === 'users' && { alignItems: 'center', width: '100%' }]}> 
+              {/* Display name: users: item.name, posts: item.author.name */}
+              <Text style={[styles.topName, view === 'users' && { textAlign: 'center', width: '100%' }]} numberOfLines={1}>
                 {view === 'users' ? topItem?.name ?? '—' : topItem?.author?.name ?? '—'}
               </Text>
 
               {/* Votes in a black “pill” bubble for strong contrast */}
-              <View style={styles.topVotesBubble}>
+              <View style={[styles.topVotesBubble, view === 'users' && { alignSelf: 'center' }]}> 
                 <Text style={styles.topVotesBubbleText}>
                   {view === 'users'
                     ? `Votes: ${String(topItem?.total_upvotes ?? 0)}`
@@ -346,7 +337,7 @@ export default function Leaderboard() {
           {/* ----------------------------
               LIST SECTION (starts at #2)
              ---------------------------- */}
-          <Text style={styles.sectionTitle}>
+          <Text style={[styles.sectionTitle, { textAlign: 'center', alignSelf: 'center', width: '100%' }]}> 
             {view === 'users' ? 'Leaderboard Users' : 'Leaderboard Posts'}
           </Text>
 
@@ -414,7 +405,9 @@ export default function Leaderboard() {
             })}
 
             {/* Empty state (only show when not loading and no rows) */}
-            {!listRows.length && !loading && <Text style={styles.empty}>No results yet</Text>}
+            {!listRows.length && !loading && (
+              <Text style={[styles.empty, { textAlign: 'center', alignSelf: 'center', width: '100%' }]}>No results yet</Text>
+            )}
           </View>
         </ScrollView>
       </View>
@@ -546,7 +539,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     color: '#000',
-    fontSize: 18,
+    fontSize: 30,
     fontWeight: 'bold',
   },
   headerSpacer: {
@@ -656,6 +649,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: 'bold',
     marginBottom: 8,
+    
   },
   listWrap: {
     // gap adds spacing between cards (RN supports gap in newer versions)
