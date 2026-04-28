@@ -16,7 +16,7 @@
  */
 
 import React, { useContext, useEffect, useState } from 'react'
-import { View, Animated, StyleSheet, ActivityIndicator, Text } from 'react-native'
+import { View, Animated, StyleSheet, ActivityIndicator, Text, TouchableOpacity } from 'react-native'
 import { useRouter } from 'expo-router'
 import Background from '../../components/Background'
 import Logo from '../../components/Logo'
@@ -137,6 +137,10 @@ export default function Dashboard() {
               Explore California State University Long Beach and Connect with others!
             </Paragraph>
 
+            <TouchableOpacity style={styles.refreshBtn} onPress={fetchPosts}>
+              <Text style={styles.refreshBtnText}>Refresh Posts</Text>
+            </TouchableOpacity>
+
             {/* Loading state for posts */}
             {loadingPosts ? (
               <ActivityIndicator size="large" color="#560CCE" style={{ marginTop: 20 }} />
@@ -148,6 +152,8 @@ export default function Dashboard() {
                   postId={post.id}
                   image={{ uri: post.image_url }}
                   username={post.username || 'Anonymous'}
+                  ownerFirebaseUid={post.owner_firebase_uid}
+                  onUsernamePress={(ownerUid) => router.push(`/profile/${ownerUid}`)}
                   likeCount={post.like_count}
                   initialLiked={post.liked}
                   onLikeToggle={handleLikeToggle}
@@ -210,5 +216,16 @@ const styles = StyleSheet.create({
     color: '#666',
     textAlign: 'center',
   },
+  refreshBtn: {
+    marginTop: 12,
+    backgroundColor: '#0f172a',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  refreshBtnText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 13,
+  },
 })
-

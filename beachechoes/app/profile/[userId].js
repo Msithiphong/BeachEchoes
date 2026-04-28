@@ -2,6 +2,7 @@ import React, { useContext, useEffect, useRef, useState } from 'react'
 import {
   View, Text, Image, StyleSheet,
   ScrollView, Alert, TouchableOpacity,
+  Switch,
 } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import Background from '../../components/Background'
@@ -43,11 +44,14 @@ export default function UserProfile() {
   // 'outgoing' = I sent, 'incoming' = they sent
   const [friendshipDirection, setFriendshipDirection] = useState(null)
   const [friendshipLoading, setFriendshipLoading] = useState(false)
+  const [muted, setMuted] = useState(false)
+  const [muteLoading, setMuteLoading] = useState(false)
 
   useEffect(() => {
     if (!userId) return
     fetchProfile()
     fetchFriendshipStatus()
+    fetchMuteStatus()
   }, [userId])
 
   const getToken = async () => {
@@ -124,6 +128,54 @@ export default function UserProfile() {
       }
     } catch (err) {
       console.log('Failed to fetch friendship status:', err)
+    }
+  }
+
+  const fetchMuteStatus = async () => {
+    try {
+      if (!currentUser?.uid || currentUser.uid === userId) {
+        setMuted(false)
+        return
+      }
+      const token = await getToken()
+      if (!token) return
+
+      const res = await fetch(`${API_BASE}/users/${encodeURIComponent(userId)}/mute-status`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const data = await res.json()
+      if (data?.success) {
+        setMuted(!!data.muted)
+      }
+    } catch (err) {
+      console.log('Failed to fetch mute status:', err)
+    }
+  }
+
+  const handleMuteToggle = async (nextMuted) => {
+    try {
+      setMuteLoading(true)
+      const token = await getToken()
+      if (!token) throw new Error('Not authenticated')
+
+      const res = await fetch(`${API_BASE}/users/${encodeURIComponent(userId)}/mute`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ muted: nextMuted }),
+      })
+      const data = await res.json()
+      if (!data?.success) {
+        throw new Error(data?.error || 'Failed to update mute status')
+      }
+      setMuted(!!data.muted)
+    } catch (err) {
+      console.error('Mute toggle error:', err)
+      Alert.alert('Error', 'Could not update mute setting')
+    } finally {
+      setMuteLoading(false)
     }
   }
 
@@ -297,6 +349,12 @@ export default function UserProfile() {
           {/* Name */}
           <Text style={styles.username}>{name}</Text>
 
+          {muted && currentUser?.uid !== userId && (
+            <View style={styles.mutedBadge}>
+              <Text style={styles.mutedBadgeText}>Muted</Text>
+            </View>
+          )}
+
           {/* Bio */}
           <Text style={styles.bioText}>{bio || 'No bio yet'}</Text>
         </View>
@@ -330,6 +388,20 @@ export default function UserProfile() {
           </Button>
         )}
 
+        {currentUser?.uid !== userId && (
+          <View style={styles.muteRow}>
+            <View style={styles.muteTextCol}>
+              <Text style={styles.muteTitle}>Mute this user</Text>
+              <Text style={styles.muteSubtitle}>Hide their posts from your feed and map.</Text>
+            </View>
+            <Switch
+              value={muted}
+              onValueChange={handleMuteToggle}
+              disabled={muteLoading}
+            />
+          </View>
+        )}
+
         {/* Back button */}
         <Button mode="outlined" onPress={() => router.back()}>
           Go Back
@@ -344,7 +416,7 @@ export default function UserProfile() {
                 key={post.id}
                 postId={post.id}
                 image={{ uri: post.image_url }}
-                username={name}
+                username={post.is_anonymous ? 'Anonymous' : name}
                 likeCount={post.like_count}
                 initialLiked={post.liked}
                 onLikeToggle={handleLikeToggle}
@@ -454,6 +526,47 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginBottom: 8,
     textAlign: 'center',
+  },
+  muteRow: {
+    width: '100%',
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginTop: 12,
+    marginBottom: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  muteTextCol: {
+    flex: 1,
+    paddingRight: 10,
+  },
+  muteTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#222',
+  },
+  muteSubtitle: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 2,
+  },
+  mutedBadge: {
+    marginTop: 6,
+    marginBottom: 4,
+    backgroundColor: '#eef2ff',
+    borderColor: '#c7d2fe',
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
+  mutedBadgeText: {
+    color: '#3730a3',
+    fontSize: 12,
+    fontWeight: '700',
   },
   center: {
     textAlign: 'center',

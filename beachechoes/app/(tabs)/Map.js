@@ -10,17 +10,19 @@ import {
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { API_BASE } from '../../config/api';
+import { auth } from '../../config/firebase';
 import { clusterPosts } from '../../helpers/clusterUtils';
 import CampusMap from '../../components/CampusMap';
 import ClusteredPin from '../../components/ClusteredPin';
 import { POST_CATEGORIES } from '../../config/postCategories';
 
-const CATEGORY_FILTERS = ['All', ...POST_CATEGORIES];
+const CATEGORY_FILTERS = ['All', ...POST_CATEGORIES, 'Muted'];
 
 export default function MapScreen() {
   const router = useRouter();
   const [posts, setPosts] = useState([]);
   const [clusters, setClusters] = useState([]);
+  const [mutedPostCount, setMutedPostCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState('All');
@@ -29,16 +31,38 @@ export default function MapScreen() {
     setLoading(true);
     setError(null);
     try {
-      const categoryParam = selectedCategory !== 'All'
-        ? `?category=${encodeURIComponent(selectedCategory)}`
-        : '';
-      const res = await fetch(`${API_BASE}/posts/map${categoryParam}`);
-      const data = await res.json();
-      if (data.success) {
-        setPosts(data.posts);
-        setClusters(clusterPosts(data.posts));
+      const token = await auth.currentUser?.getIdToken();
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+
+      const mutedFetchPromise = token
+        ? fetch(`${API_BASE}/posts/muted`, { headers })
+        : Promise.resolve({ ok: true, json: async () => ({ success: true, posts: [] }) });
+
+      const activePostsFetchPromise =
+        selectedCategory === 'Muted'
+          ? (token
+              ? fetch(`${API_BASE}/posts/muted`, { headers })
+              : Promise.resolve({ ok: true, json: async () => ({ success: true, posts: [] }) }))
+          : (() => {
+              const params = new URLSearchParams();
+              if (selectedCategory !== 'All') {
+                params.set('category', selectedCategory);
+              }
+              const query = params.toString();
+              const categoryParam = query ? `?${query}` : '';
+              return fetch(`${API_BASE}/posts/map${categoryParam}`, { headers });
+            })();
+
+      const [res, mutedRes] = await Promise.all([activePostsFetchPromise, mutedFetchPromise]);
+      const [data, mutedData] = await Promise.all([res.json(), mutedRes.json()]);
+
+      if (data?.success) {
+        const nextPosts = data?.posts ?? [];
+        setPosts(nextPosts);
+        setClusters(clusterPosts(nextPosts));
+        setMutedPostCount(mutedData?.success ? (mutedData.posts ?? []).length : 0);
       } else {
-        setError('Could not load posts.');
+        setError(data?.error || 'Could not load posts.');
       }
     } catch (err) {
       console.error('Map fetch error:', err);
@@ -51,7 +75,13 @@ export default function MapScreen() {
   useEffect(() => { fetchPosts(); }, [fetchPosts]);
 
   function handlePinPress(ids) {
-    router.push({ pathname: '/PostDetail', params: { ids: ids.join(',') } });
+    router.push({
+      pathname: '/PostDetail',
+      params: {
+        ids: ids.join(','),
+        includeMuted: selectedCategory === 'Muted' ? '1' : '0',
+      },
+    });
   }
 
   return (
@@ -64,6 +94,9 @@ export default function MapScreen() {
       <View style={styles.headerCard}>
         <Text style={styles.heading}>Campus Map</Text>
         <Text style={styles.subheading}>Explore echoes by spot and category.</Text>
+        <TouchableOpacity style={styles.refreshBtn} onPress={fetchPosts}>
+          <Text style={styles.refreshBtnText}>Refresh</Text>
+        </TouchableOpacity>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -71,13 +104,14 @@ export default function MapScreen() {
         >
           {CATEGORY_FILTERS.map((category) => {
             const active = category === selectedCategory;
+            const label = category === 'Muted' ? `Muted (${mutedPostCount})` : category;
             return (
               <TouchableOpacity
                 key={category}
                 style={[styles.filterChip, active && styles.filterChipActive]}
                 onPress={() => setSelectedCategory(category)}
               >
-                <Text style={[styles.filterText, active && styles.filterTextActive]}>{category}</Text>
+                <Text style={[styles.filterText, active && styles.filterTextActive]}>{label}</Text>
               </TouchableOpacity>
             );
           })}
@@ -139,6 +173,19 @@ const styles = StyleSheet.create({
     color: '#0f172a',
   },
   subheading: { marginTop: 4, fontSize: 13, color: '#334155' },
+  refreshBtn: {
+    alignSelf: 'flex-end',
+    marginTop: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 10,
+    backgroundColor: '#0f172a',
+  },
+  refreshBtnText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
+  },
   filterRow: { marginTop: 12, paddingRight: 8, gap: 8 },
   filterChip: {
     borderWidth: 1,
