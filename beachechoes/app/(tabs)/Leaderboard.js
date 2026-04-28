@@ -64,10 +64,8 @@ export default function Leaderboard() {
   // - 'posts' => backend returns post leaderboard rows
   const [view, setView] = useState('users')
 
-  // period controls time window for ranking:
-  // backend supports day|week|month|all (per your comment),
-  // but the UI only shows week/month for simplicity.
-  const [period, setPeriod] = useState('week')
+  // period controls time window for ranking (removed UI for week/month)
+  const period = 'week'
 
   // Loading + error states for fetch UI
   const [loading, setLoading] = useState(false)
@@ -86,10 +84,7 @@ export default function Leaderboard() {
   // Here it’s computed locally from rows (no separate /api/stats call).
   const [stats, setStats] = useState({ echoes: 0, appraises: 0, comments: 0 })
 
-  // UI only displays Week/Month.
-  // If period is anything else (like 'day' or 'all'), this falls back to showing 'week' selected.
-  // (You can expand the UI later if you want more periods.)
-  const togglePeriodValue = period === 'month' ? 'month' : 'week'
+  // UI only displays one period (week) now.
 
   // ------------------------------------
   // Build the leaderboard URL (memoized)
@@ -269,20 +264,8 @@ export default function Leaderboard() {
               FILTERS (stay near top)
              ---------------------------- */}
           <Surface style={styles.filterWrap} elevation={0}>
-            {/* Period toggle (Week/Month only) */}
-            <SegmentedButtons
-              value={togglePeriodValue}
-              // When user taps week/month, update `period` state => triggers useEffect => reload
-              onValueChange={(v) => setPeriod(v)}
-              buttons={[
-                { value: 'week', label: 'Week' },
-                { value: 'month', label: 'Month' },
-              ]}
-              style={styles.segmented}
-            />
-
-            {/* Simple spacing between the two segmented rows */}
-            <View style={{ height: 10 }} />
+            {/* Removed Week/Month period toggle buttons */}
+            {/* Simple spacing between the two segmented rows (removed) */}
 
             {/* View toggle (Top Users / Top Posts) */}
             <SegmentedButtons
@@ -322,14 +305,13 @@ export default function Leaderboard() {
               {view === 'users' ? 'Top User' : 'Top Post'}
             </Text>
 
-            {/* Avatar + medal row */}
+            {/* Avatar row (no medal for Top User) */}
             <View style={styles.topCardRow}>
               <View style={styles.topAvatarAndMedal}>
                 {/* Avatar rendering depends on view + available URL */}
                 {renderAvatar(topItem, view)}
-                <View style={{ width: 10 }} />
-                {/* Rank #1 medal */}
-                {renderMedal(1, 38)}
+                {/* Medal only for Top Post, not Top User */}
+                {view === 'posts' && <><View style={{ width: 10 }} />{renderMedal(1, 38)}</>}
               </View>
             </View>
 
