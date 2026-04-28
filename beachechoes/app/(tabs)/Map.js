@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback } from 'react'
 import {
   View,
   Text,
@@ -6,73 +6,97 @@ import {
   ActivityIndicator,
   ScrollView,
   TouchableOpacity,
-} from 'react-native';
-import { useRouter } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
-import { API_BASE } from '../../config/api';
-import { auth } from '../../config/firebase';
-import { clusterPosts } from '../../helpers/clusterUtils';
-import CampusMap from '../../components/CampusMap';
-import ClusteredPin from '../../components/ClusteredPin';
-import { POST_CATEGORIES } from '../../config/postCategories';
+} from 'react-native'
+import { useRouter } from 'expo-router'
+import { LinearGradient } from 'expo-linear-gradient'
 
-const CATEGORY_FILTERS = ['All', ...POST_CATEGORIES, 'Muted'];
+import { API_BASE } from '../../config/api'
+import { auth } from '../../config/firebase'
+import { clusterPosts } from '../../helpers/clusterUtils'
+import CampusMap from '../../components/CampusMap'
+import ClusteredPin from '../../components/ClusteredPin'
+import { POST_CATEGORIES } from '../../config/postCategories'
+
+const CATEGORY_FILTERS = ['All', ...POST_CATEGORIES, 'Muted']
 
 export default function MapScreen() {
-  const router = useRouter();
-  const [posts, setPosts] = useState([]);
-  const [clusters, setClusters] = useState([]);
-  const [mutedPostCount, setMutedPostCount] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [selectedCategory, setSelectedCategory] = useState('All');
+  const router = useRouter()
+
+  const [posts, setPosts] = useState([])
+  const [clusters, setClusters] = useState([])
+  const [mutedPostCount, setMutedPostCount] = useState(0)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+  const [selectedCategory, setSelectedCategory] = useState('All')
 
   const fetchPosts = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+    setLoading(true)
+    setError(null)
+
     try {
-      const token = await auth.currentUser?.getIdToken();
-      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      const token = await auth.currentUser?.getIdToken()
+      const headers = token ? { Authorization: `Bearer ${token}` } : {}
 
       const mutedFetchPromise = token
         ? fetch(`${API_BASE}/posts/muted`, { headers })
-        : Promise.resolve({ ok: true, json: async () => ({ success: true, posts: [] }) });
+        : Promise.resolve({
+            ok: true,
+            json: async () => ({ success: true, posts: [] }),
+          })
 
       const activePostsFetchPromise =
         selectedCategory === 'Muted'
-          ? (token
-              ? fetch(`${API_BASE}/posts/muted`, { headers })
-              : Promise.resolve({ ok: true, json: async () => ({ success: true, posts: [] }) }))
+          ? token
+            ? fetch(`${API_BASE}/posts/muted`, { headers })
+            : Promise.resolve({
+                ok: true,
+                json: async () => ({ success: true, posts: [] }),
+              })
           : (() => {
-              const params = new URLSearchParams();
-              if (selectedCategory !== 'All') {
-                params.set('category', selectedCategory);
-              }
-              const query = params.toString();
-              const categoryParam = query ? `?${query}` : '';
-              return fetch(`${API_BASE}/posts/map${categoryParam}`, { headers });
-            })();
+              const params = new URLSearchParams()
 
-      const [res, mutedRes] = await Promise.all([activePostsFetchPromise, mutedFetchPromise]);
-      const [data, mutedData] = await Promise.all([res.json(), mutedRes.json()]);
+              if (selectedCategory !== 'All') {
+                params.set('category', selectedCategory)
+              }
+
+              const query = params.toString()
+              const categoryParam = query ? `?${query}` : ''
+
+              return fetch(`${API_BASE}/posts/map${categoryParam}`, { headers })
+            })()
+
+      const [res, mutedRes] = await Promise.all([
+        activePostsFetchPromise,
+        mutedFetchPromise,
+      ])
+
+      const [data, mutedData] = await Promise.all([
+        res.json(),
+        mutedRes.json(),
+      ])
 
       if (data?.success) {
-        const nextPosts = data?.posts ?? [];
-        setPosts(nextPosts);
-        setClusters(clusterPosts(nextPosts));
-        setMutedPostCount(mutedData?.success ? (mutedData.posts ?? []).length : 0);
+        const nextPosts = data?.posts ?? []
+
+        setPosts(nextPosts)
+        setClusters(clusterPosts(nextPosts))
+        setMutedPostCount(
+          mutedData?.success ? (mutedData.posts ?? []).length : 0
+        )
       } else {
-        setError(data?.error || 'Could not load posts.');
+        setError(data?.error || 'Could not load posts.')
       }
     } catch (err) {
-      console.error('Map fetch error:', err);
-      setError('Network error. Make sure the server is running.');
+      console.error('Map fetch error:', err)
+      setError('Network error. Make sure the server is running.')
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  }, [selectedCategory]);
+  }, [selectedCategory])
 
-  useEffect(() => { fetchPosts(); }, [fetchPosts]);
+  useEffect(() => {
+    fetchPosts()
+  }, [fetchPosts])
 
   function handlePinPress(ids) {
     router.push({
@@ -81,79 +105,95 @@ export default function MapScreen() {
         ids: ids.join(','),
         includeMuted: selectedCategory === 'Muted' ? '1' : '0',
       },
-    });
+    })
   }
 
   return (
-    <LinearGradient
-      colors={['#96c7e3', '#edd02c']}
-      start={{ x: 0.5, y: 0 }}
-      end={{ x: 0.5, y: 1 }}
-      style={styles.container}
-    >
+    <LinearGradient colors={['#9ed4df', '#ffe000']} style={styles.container}>
       <View style={styles.headerCard}>
         <Text style={styles.heading}>Campus Map</Text>
-        <Text style={styles.subheading}>Explore echoes by spot and category.</Text>
+        <Text style={styles.subheading}>
+          Explore echoes by spot and category.
+        </Text>
+
         <TouchableOpacity style={styles.refreshBtn} onPress={fetchPosts}>
           <Text style={styles.refreshBtnText}>Refresh</Text>
         </TouchableOpacity>
+
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.filterRow}
         >
-          {CATEGORY_FILTERS.map((category) => {
-            const active = category === selectedCategory;
-            const label = category === 'Muted' ? `Muted (${mutedPostCount})` : category;
+          {CATEGORY_FILTERS.map(category => {
+            const active = category === selectedCategory
+            const label =
+              category === 'Muted' ? `Muted (${mutedPostCount})` : category
+
             return (
               <TouchableOpacity
                 key={category}
-                style={[styles.filterChip, active && styles.filterChipActive]}
+                style={[
+                  styles.filterChip,
+                  active && styles.filterChipActive,
+                ]}
                 onPress={() => setSelectedCategory(category)}
               >
-                <Text style={[styles.filterText, active && styles.filterTextActive]}>{label}</Text>
+                <Text
+                  style={[
+                    styles.filterText,
+                    active && styles.filterTextActive,
+                  ]}
+                >
+                  {label}
+                </Text>
               </TouchableOpacity>
-            );
+            )
           })}
         </ScrollView>
       </View>
 
       {loading ? (
-        <ActivityIndicator size="large" color="#0f172a" style={styles.loader} />
+        <ActivityIndicator style={styles.loader} size="large" />
       ) : error ? (
         <View style={styles.errorBox}>
           <Text style={styles.errorText}>{error}</Text>
+
           <TouchableOpacity style={styles.retryBtn} onPress={fetchPosts}>
             <Text style={styles.retryText}>Retry</Text>
           </TouchableOpacity>
         </View>
       ) : (
-        <ScrollView contentContainerStyle={styles.mapWrapper} showsVerticalScrollIndicator={false}>
+        <View style={styles.mapWrapper}>
           <View style={styles.mapCard}>
             <CampusMap>
               {clusters.map((cluster, i) => (
                 <ClusteredPin
-                  key={i}
+                  key={`${cluster.ids.join('-')}-${i}`}
                   centroid={cluster.centroid}
                   ids={cluster.ids}
                   onPress={handlePinPress}
                 />
               ))}
             </CampusMap>
+
+            {posts.length === 0 && (
+              <Text style={styles.emptyNote}>
+                No posts in {selectedCategory}. Try another category or be the
+                first to post.
+              </Text>
+            )}
           </View>
-          {posts.length === 0 && (
-            <Text style={styles.emptyNote}>
-              No posts in {selectedCategory}. Try another category or be the first to post.
-            </Text>
-          )}
-        </ScrollView>
+        </View>
       )}
     </LinearGradient>
-  );
+  )
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
+  container: {
+    flex: 1,
+  },
   headerCard: {
     marginTop: 52,
     marginHorizontal: 16,
@@ -172,7 +212,11 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#0f172a',
   },
-  subheading: { marginTop: 4, fontSize: 13, color: '#334155' },
+  subheading: {
+    marginTop: 4,
+    fontSize: 13,
+    color: '#334155',
+  },
   refreshBtn: {
     alignSelf: 'flex-end',
     marginTop: 8,
@@ -186,7 +230,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '700',
   },
-  filterRow: { marginTop: 12, paddingRight: 8, gap: 8 },
+  filterRow: {
+    marginTop: 12,
+    paddingRight: 8,
+    gap: 8,
+  },
   filterChip: {
     borderWidth: 1,
     borderColor: '#cbd5e1',
@@ -199,10 +247,21 @@ const styles = StyleSheet.create({
     backgroundColor: '#1e293b',
     borderColor: '#1e293b',
   },
-  filterText: { fontSize: 13, color: '#334155', fontWeight: '700' },
-  filterTextActive: { color: '#fff' },
-  loader: { marginTop: 60 },
-  mapWrapper: { paddingHorizontal: 12, paddingBottom: 12 },
+  filterText: {
+    fontSize: 13,
+    color: '#334155',
+    fontWeight: '700',
+  },
+  filterTextActive: {
+    color: '#fff',
+  },
+  loader: {
+    marginTop: 60,
+  },
+  mapWrapper: {
+    paddingHorizontal: 12,
+    paddingBottom: 12,
+  },
   mapCard: {
     borderRadius: 18,
     overflow: 'hidden',
@@ -224,7 +283,11 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 12,
   },
-  errorBox: { alignItems: 'center', marginTop: 60, paddingHorizontal: 24 },
+  errorBox: {
+    alignItems: 'center',
+    marginTop: 60,
+    paddingHorizontal: 24,
+  },
   errorText: {
     color: '#7f1d1d',
     fontSize: 14,
@@ -241,5 +304,8 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     backgroundColor: '#0f172a',
   },
-  retryText: { color: '#fff', fontWeight: '700' },
-});
+  retryText: {
+    color: '#fff',
+    fontWeight: '700',
+  },
+})
