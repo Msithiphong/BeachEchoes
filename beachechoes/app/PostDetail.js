@@ -12,6 +12,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { AuthContext } from '../context/AuthContext';
 import { API_BASE } from '../config/api';
+import { auth } from '../config/firebase';
 import PostImageWithOverlay from '../components/PostImageWithOverlay';
 import LikeButton from '../components/LikeButton';
 import ReportPostModal from '../components/ReportPostModal';
@@ -27,7 +28,7 @@ function formatDateTime(ts) {
 
 export default function PostDetail() {
   const router = useRouter();
-  const { ids } = useLocalSearchParams(); // comma-separated post IDs
+  const { ids, includeMuted } = useLocalSearchParams(); // comma-separated post IDs
   const { user } = useContext(AuthContext);
 
   const [posts, setPosts] = useState([]);
@@ -39,7 +40,12 @@ export default function PostDetail() {
     if (!ids) return;
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/posts/detail?ids=${ids}`);
+      const token = await auth.currentUser?.getIdToken();
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      const params = new URLSearchParams();
+      params.set('ids', ids);
+      if (includeMuted === '1') params.set('includeMuted', '1');
+      const res = await fetch(`${API_BASE}/posts/detail?${params.toString()}`, { headers });
       const data = await res.json();
       if (data.success) setPosts(data.posts);
     } catch (err) {
@@ -47,7 +53,7 @@ export default function PostDetail() {
     } finally {
       setLoading(false);
     }
-  }, [ids]);
+  }, [ids, includeMuted]);
 
   useEffect(() => { fetchPosts(); }, [fetchPosts]);
 
@@ -60,11 +66,18 @@ export default function PostDetail() {
     const createdLabel = formatDateTime(item.created_at);
     const expiresLabel = formatDateTime(item.expires_at);
     const usernameLabel = item.username || 'Anonymous';
+    const canOpenProfile = Boolean(item.owner_firebase_uid);
 
     return (
       <View style={styles.card}>
         <View style={styles.authorRow}>
-          <Text style={styles.authorLabel}>Posted by {usernameLabel}</Text>
+          <Text style={styles.authorPrefix}>Posted by </Text>
+          <TouchableOpacity
+            onPress={() => canOpenProfile && router.push(`/profile/${item.owner_firebase_uid}`)}
+            disabled={!canOpenProfile}
+          >
+            <Text style={[styles.authorLabel, canOpenProfile && styles.authorLink]}>{usernameLabel}</Text>
+          </TouchableOpacity>
         </View>
         <View style={styles.cardTopMeta}>
           <View style={styles.categoryBadge}>
@@ -192,11 +205,17 @@ const styles = StyleSheet.create({
   authorRow: {
     paddingHorizontal: 14,
     paddingTop: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
   },
+  authorPrefix: { fontSize: 13, color: '#0f172a', fontWeight: '700' },
   authorLabel: {
     fontSize: 13,
     color: '#0f172a',
     fontWeight: '700',
+  },
+  authorLink: {
+    textDecorationLine: 'underline',
   },
   cardTopMeta: {
     paddingHorizontal: 14,

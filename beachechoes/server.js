@@ -242,10 +242,13 @@ app.get('/api/profile/:userId', async (req, res) => {
       SELECT COUNT(*)::int AS count FROM posts WHERE user_id = ${neonId} AND is_deleted = FALSE
     `
 
-    // Following = accepted requests this user sent (user_id = me)
+    // Following = accepted connections involving this user.
+    // We count accepted rows in either direction so accepted relationships
+    // are not missed due to request direction.
     const followingResult = await sql`
       SELECT COUNT(*)::int AS count FROM friendships
-      WHERE user_id = ${neonId} AND status = 'accepted'
+      WHERE (user_id = ${neonId} OR friend_id = ${neonId})
+        AND status = 'accepted'
     `
 
     // Followers = accepted requests sent TO this user (friend_id = me)
@@ -297,6 +300,18 @@ app.put('/api/profile/:userId', requireFirebaseAuth, async (req, res) => {
 async function resolveUserId(firebaseUid) {
   const rows = await sql`SELECT user_id FROM users WHERE firebase_uid = ${firebaseUid}`
   return rows.length ? rows[0].user_id : null
+}
+
+async function resolveViewerUserId(req) {
+  const authHeader = req.headers.authorization
+  if (!authHeader || !authHeader.startsWith('Bearer ')) return null
+  try {
+    const token = authHeader.slice(7)
+    const decodedToken = await admin.auth().verifyIdToken(token)
+    return await resolveUserId(decodedToken.uid)
+  } catch {
+    return null
+  }
 }
 
 // -------------------- NOTIFICATIONS --------------------
@@ -679,7 +694,7 @@ app.get('/api/friendships/pending', requireFirebaseAuth, async (req, res) => {
 
 // -------------------- FOLLOWERS / FOLLOWING LISTS --------------------
 
-// GET /api/friendships/following/:firebaseUid  — users this person follows
+// GET /api/friendships/following/:firebaseUid  — accepted connections for this user
 app.get('/api/friendships/following/:firebaseUid', async (req, res) => {
   try {
     const uid = req.params.firebaseUid
@@ -687,10 +702,14 @@ app.get('/api/friendships/following/:firebaseUid', async (req, res) => {
     if (!meId) return res.json({ success: true, users: [] })
 
     const rows = await sql`
-      SELECT u.firebase_uid, u.name, u.avatar_url
+      SELECT DISTINCT u.firebase_uid, u.name, u.avatar_url
       FROM friendships f
-      JOIN users u ON u.user_id = f.friend_id
-      WHERE f.user_id = ${meId} AND f.status = 'accepted'
+      JOIN users u ON u.user_id = CASE
+        WHEN f.user_id = ${meId} THEN f.friend_id
+        ELSE f.user_id
+      END
+      WHERE (f.user_id = ${meId} OR f.friend_id = ${meId})
+        AND f.status = 'accepted'
       ORDER BY u.name ASC
     `
     res.json({ success: true, users: rows })
@@ -717,6 +736,75 @@ app.get('/api/friendships/followers/:firebaseUid', async (req, res) => {
     res.json({ success: true, users: rows })
   } catch (err) {
     console.error('Followers list error:', err)
+    res.status(500).json({ success: false, error: 'Internal server error' })
+  }
+})
+
+// -------------------- USER MUTES --------------------
+
+// GET mute status for a target user
+app.get('/api/users/:targetUid/mute-status', requireFirebaseAuth, async (req, res) => {
+  try {
+    const myId = await resolveUserId(req.firebase.uid)
+    const targetId = await resolveUserId(req.params.targetUid)
+
+    if (!myId || !targetId) {
+      return res.status(404).json({ success: false, error: 'User not found' })
+    }
+
+    if (myId === targetId) {
+      return res.json({ success: true, muted: false })
+    }
+
+    const rows = await sql`
+      SELECT 1
+      FROM user_mutes
+      WHERE muter_user_id = ${myId} AND muted_user_id = ${targetId}
+      LIMIT 1
+    `
+    res.json({ success: true, muted: rows.length > 0 })
+  } catch (error) {
+    console.error('Get mute status error:', error)
+    res.status(500).json({ success: false, error: 'Internal server error' })
+  }
+})
+
+// PUT mute status for a target user
+app.put('/api/users/:targetUid/mute', requireFirebaseAuth, async (req, res) => {
+  try {
+    const { muted } = req.body
+    if (typeof muted !== 'boolean') {
+      return res.status(400).json({ success: false, error: 'muted boolean is required' })
+    }
+
+    const myId = await resolveUserId(req.firebase.uid)
+    const targetId = await resolveUserId(req.params.targetUid)
+
+    if (!myId || !targetId) {
+      return res.status(404).json({ success: false, error: 'User not found' })
+    }
+
+    if (myId === targetId) {
+      return res.status(400).json({ success: false, error: 'Cannot mute yourself' })
+    }
+
+    if (muted) {
+      await sql`
+        INSERT INTO user_mutes (muter_user_id, muted_user_id)
+        VALUES (${myId}, ${targetId})
+        ON CONFLICT (muter_user_id, muted_user_id) DO NOTHING
+      `
+    } else {
+      await sql`
+        DELETE FROM user_mutes
+        WHERE muter_user_id = ${myId}
+          AND muted_user_id = ${targetId}
+      `
+    }
+
+    res.json({ success: true, muted })
+  } catch (error) {
+    console.error('Set mute status error:', error)
     res.status(500).json({ success: false, error: 'Internal server error' })
   }
 })
@@ -1096,19 +1184,50 @@ app.post('/api/posts', requireFirebaseAuth, async (req, res) => {
 app.get('/api/posts/map', async (req, res) => {
   try {
     const rawCategory = String(req.query.category || '').trim()
-    const shouldFilterCategory = rawCategory.length > 0
+    const showMutedOnly = rawCategory.toLowerCase() === 'muted'
+    const shouldFilterCategory = rawCategory.length > 0 && !showMutedOnly
     if (shouldFilterCategory && !isValidPostCategory(rawCategory)) {
       return res.status(400).json({ success: false, error: 'Invalid category' })
     }
 
-    const rows = await sql`
-      SELECT id, map_x, map_y
-      FROM posts
-      WHERE is_deleted = FALSE
-        AND created_at >= NOW() - ${POST_TTL_INTERVAL}::interval
-        AND (${!shouldFilterCategory} OR category = ${rawCategory})
-      ORDER BY created_at DESC
-    `
+    const viewerUserId = await resolveViewerUserId(req)
+
+    let rows
+    if (showMutedOnly) {
+      if (!viewerUserId) {
+        rows = []
+      } else {
+        rows = await sql`
+          SELECT p.id, p.map_x, p.map_y
+          FROM posts p
+          WHERE p.is_deleted = FALSE
+            AND p.created_at >= NOW() - ${POST_TTL_INTERVAL}::interval
+            AND p.user_id IN (
+              SELECT muted_user_id
+              FROM user_mutes
+              WHERE muter_user_id = ${viewerUserId}::int
+            )
+          ORDER BY p.created_at DESC
+        `
+      }
+    } else {
+      rows = await sql`
+        SELECT p.id, p.map_x, p.map_y
+        FROM posts p
+        WHERE p.is_deleted = FALSE
+          AND p.created_at >= NOW() - ${POST_TTL_INTERVAL}::interval
+          AND (${!shouldFilterCategory} OR p.category = ${rawCategory})
+          AND (
+            ${viewerUserId}::int IS NULL
+            OR p.user_id NOT IN (
+              SELECT muted_user_id
+              FROM user_mutes
+              WHERE muter_user_id = ${viewerUserId}::int
+            )
+          )
+        ORDER BY p.created_at DESC
+      `
+    }
     res.json({ success: true, posts: rows })
   } catch (err) {
     console.error('GET /api/posts/map error:', err)
@@ -1116,21 +1235,36 @@ app.get('/api/posts/map', async (req, res) => {
   }
 })
 
+// GET /api/posts/muted — active posts from muted users for the authed user
+app.get('/api/posts/muted', requireFirebaseAuth, async (req, res) => {
+  try {
+    const viewerUserId = await resolveUserId(req.firebase.uid)
+    if (!viewerUserId) return res.json({ success: true, posts: [] })
+
+    const rows = await sql`
+      SELECT p.id, p.map_x, p.map_y
+      FROM posts p
+      WHERE p.is_deleted = FALSE
+        AND p.created_at >= NOW() - ${POST_TTL_INTERVAL}::interval
+        AND p.user_id IN (
+          SELECT muted_user_id
+          FROM user_mutes
+          WHERE muter_user_id = ${viewerUserId}
+        )
+      ORDER BY p.created_at DESC
+    `
+
+    res.json({ success: true, posts: rows })
+  } catch (err) {
+    console.error('GET /api/posts/muted error:', err)
+    res.status(500).json({ success: false, error: 'Internal server error' })
+  }
+})
+
 // GET /api/posts/feed — public feed of all posts with user info and like data
 app.get('/api/posts/feed', async (req, res) => {
   try {
-    // Get requesting user's ID for like status (optional, may be null if not authenticated)
-    let viewerUserId = null
-    const authHeader = req.headers.authorization
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      try {
-        const token = authHeader.slice(7)
-        const decodedToken = await admin.auth().verifyIdToken(token)
-        viewerUserId = await resolveUserId(decodedToken.uid)
-      } catch (err) {
-        // Viewer not authenticated, continue without like status
-      }
-    }
+    const viewerUserId = await resolveViewerUserId(req)
 
     const hasAnonymousColumn = await ensurePostsAnonymousColumnKnown()
     const rows = hasAnonymousColumn
@@ -1144,6 +1278,7 @@ app.get('/api/posts/feed', async (req, res) => {
             CASE WHEN ${viewerUserId}::int IS NOT NULL AND ul.user_id IS NOT NULL THEN TRUE ELSE FALSE END AS liked,
             CASE WHEN p.is_anonymous THEN 'Anonymous' ELSE u.name END AS username,
             CASE WHEN p.is_anonymous THEN NULL ELSE u.avatar_url END AS user_avatar_url,
+            CASE WHEN p.is_anonymous THEN NULL ELSE u.firebase_uid END AS owner_firebase_uid,
             p.is_anonymous
           FROM posts p
           LEFT JOIN users u ON u.user_id = p.user_id
@@ -1154,6 +1289,14 @@ app.get('/api/posts/feed', async (req, res) => {
           ) l ON l.post_id = p.id
           LEFT JOIN post_likes ul ON ul.post_id = p.id AND ul.user_id = ${viewerUserId}::int
           WHERE p.is_deleted = FALSE
+            AND (
+              ${viewerUserId}::int IS NULL
+              OR p.user_id NOT IN (
+                SELECT muted_user_id
+                FROM user_mutes
+                WHERE muter_user_id = ${viewerUserId}::int
+              )
+            )
           ORDER BY p.created_at DESC
         `
       : await sql`
@@ -1166,6 +1309,7 @@ app.get('/api/posts/feed', async (req, res) => {
             CASE WHEN ${viewerUserId}::int IS NOT NULL AND ul.user_id IS NOT NULL THEN TRUE ELSE FALSE END AS liked,
             u.name AS username,
             u.avatar_url AS user_avatar_url,
+            u.firebase_uid AS owner_firebase_uid,
             FALSE AS is_anonymous
           FROM posts p
           LEFT JOIN users u ON u.user_id = p.user_id
@@ -1176,6 +1320,14 @@ app.get('/api/posts/feed', async (req, res) => {
           ) l ON l.post_id = p.id
           LEFT JOIN post_likes ul ON ul.post_id = p.id AND ul.user_id = ${viewerUserId}::int
           WHERE p.is_deleted = FALSE
+            AND (
+              ${viewerUserId}::int IS NULL
+              OR p.user_id NOT IN (
+                SELECT muted_user_id
+                FROM user_mutes
+                WHERE muter_user_id = ${viewerUserId}::int
+              )
+            )
           ORDER BY p.created_at DESC
         `
 
@@ -1192,18 +1344,7 @@ app.get('/api/posts/user/:userId', async (req, res) => {
     const userId = parseInt(req.params.userId, 10)
     if (!Number.isFinite(userId)) return res.status(400).json({ success: false, error: 'Invalid user id' })
 
-    // Get requesting user's ID for like status (optional, may be null if not authenticated)
-    let viewerUserId = null
-    const authHeader = req.headers.authorization
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      try {
-        const token = authHeader.slice(7)
-        const decodedToken = await admin.auth().verifyIdToken(token)
-        viewerUserId = await resolveUserId(decodedToken.uid)
-      } catch (err) {
-        // Viewer not authenticated, continue without like status
-      }
-    }
+    const viewerUserId = await resolveViewerUserId(req)
 
     const hasAnonymousColumn = await ensurePostsAnonymousColumnKnown()
     const rows = hasAnonymousColumn
@@ -1225,6 +1366,14 @@ app.get('/api/posts/user/:userId', async (req, res) => {
           LEFT JOIN post_likes ul ON ul.post_id = p.id AND ul.user_id = ${viewerUserId}::int
           WHERE p.user_id = ${userId}
             AND p.is_deleted = FALSE
+            AND (
+              ${viewerUserId}::int IS NULL
+              OR p.user_id NOT IN (
+                SELECT muted_user_id
+                FROM user_mutes
+                WHERE muter_user_id = ${viewerUserId}::int
+              )
+            )
           ORDER BY p.created_at DESC
         `
       : await sql`
@@ -1245,6 +1394,14 @@ app.get('/api/posts/user/:userId', async (req, res) => {
           LEFT JOIN post_likes ul ON ul.post_id = p.id AND ul.user_id = ${viewerUserId}::int
           WHERE p.user_id = ${userId}
             AND p.is_deleted = FALSE
+            AND (
+              ${viewerUserId}::int IS NULL
+              OR p.user_id NOT IN (
+                SELECT muted_user_id
+                FROM user_mutes
+                WHERE muter_user_id = ${viewerUserId}::int
+              )
+            )
           ORDER BY p.created_at DESC
         `
 
@@ -1266,6 +1423,8 @@ app.get('/api/posts/detail', async (req, res) => {
 
     if (!ids.length) return res.status(400).json({ success: false, error: 'ids are required' })
 
+    const viewerUserId = await resolveViewerUserId(req)
+    const includeMuted = String(req.query.includeMuted || '0') === '1'
     const hasAnonymousColumn = await ensurePostsAnonymousColumnKnown()
     const rows = hasAnonymousColumn
       ? await sql`
@@ -1281,7 +1440,7 @@ app.get('/api/posts/detail', async (req, res) => {
             p.created_at + ${POST_TTL_INTERVAL}::interval AS expires_at,
             COALESCE(l.like_count, 0)::int AS like_count,
             CASE WHEN p.is_anonymous THEN 'Anonymous' ELSE u.name END AS username,
-            u.firebase_uid AS owner_firebase_uid
+            CASE WHEN p.is_anonymous THEN NULL ELSE u.firebase_uid END AS owner_firebase_uid
           FROM posts p
           LEFT JOIN users u ON u.user_id = p.user_id
           LEFT JOIN (
@@ -1292,6 +1451,25 @@ app.get('/api/posts/detail', async (req, res) => {
           WHERE p.id = ANY(${ids})
             AND p.is_deleted = FALSE
             AND p.created_at >= NOW() - ${POST_TTL_INTERVAL}::interval
+            AND (
+              ${viewerUserId}::int IS NULL
+              OR (
+                ${includeMuted}
+                AND p.user_id IN (
+                  SELECT muted_user_id
+                  FROM user_mutes
+                  WHERE muter_user_id = ${viewerUserId}::int
+                )
+              )
+              OR (
+                ${!includeMuted}
+                AND p.user_id NOT IN (
+                  SELECT muted_user_id
+                  FROM user_mutes
+                  WHERE muter_user_id = ${viewerUserId}::int
+                )
+              )
+            )
           ORDER BY p.created_at DESC
         `
       : await sql`
@@ -1318,6 +1496,25 @@ app.get('/api/posts/detail', async (req, res) => {
           WHERE p.id = ANY(${ids})
             AND p.is_deleted = FALSE
             AND p.created_at >= NOW() - ${POST_TTL_INTERVAL}::interval
+            AND (
+              ${viewerUserId}::int IS NULL
+              OR (
+                ${includeMuted}
+                AND p.user_id IN (
+                  SELECT muted_user_id
+                  FROM user_mutes
+                  WHERE muter_user_id = ${viewerUserId}::int
+                )
+              )
+              OR (
+                ${!includeMuted}
+                AND p.user_id NOT IN (
+                  SELECT muted_user_id
+                  FROM user_mutes
+                  WHERE muter_user_id = ${viewerUserId}::int
+                )
+              )
+            )
           ORDER BY p.created_at DESC
         `
     res.json({ success: true, posts: rows })

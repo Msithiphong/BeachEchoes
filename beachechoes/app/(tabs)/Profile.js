@@ -358,7 +358,7 @@ export default function Profile() {
                 key={post.id}
                 postId={post.id}
                 image={{ uri: post.image_url }}
-                username={name || user?.email}
+                username={post.is_anonymous ? 'Anonymous' : (name || user?.email)}
                 likeCount={post.like_count}
                 initialLiked={post.liked}
                 onLikeToggle={handleLikeToggle}
@@ -610,7 +610,6 @@ const styles = StyleSheet.create({
     color: '#666',
   },
 })
-
 
 
 
