@@ -16,57 +16,64 @@
  */
 
 import React, { useRef, useState } from 'react'
-import { View, TouchableOpacity, StyleSheet, Text, ActivityIndicator, Platform } from 'react-native'
+import {
+  View,
+  TouchableOpacity,
+  StyleSheet,
+  Text,
+  ActivityIndicator,
+  Platform,
+  Alert,
+} from 'react-native'
 import { useRouter } from 'expo-router'
 import { CameraView, useCameraPermissions } from 'expo-camera'
+import * as Location from 'expo-location'
 import BackButton from '../../components/BackButton'
 import { theme } from '../../core/theme'
 import { useDraftPost } from '../../context/DraftPostContext'
 
 function parseExifDate(value) {
   if (!value || typeof value !== 'string') return null
+
   const normalized = value.replace(/^(\d{4}):(\d{2}):(\d{2})/, '$1-$2-$3')
   const ms = Date.parse(normalized)
+
   return Number.isFinite(ms) ? ms : null
 }
 
 export default function CameraScreen() {
-  // Navigation hook for routing
   const router = useRouter()
-  
-  // Camera permission state and request function from expo-camera
   const [permission, requestPermission] = useCameraPermissions()
-  
-  // Reference to the camera component for taking pictures
   const cameraRef = useRef(null)
-  
-  // State to prevent multiple simultaneous photo captures
+
   const [isTakingPicture, setIsTakingPicture] = useState(false)
   const [cameraError, setCameraError] = useState(null)
 
-  const { setLocalImageUri, setCapturedAt, clearDraft } = useDraftPost()
+  const {
+    setLocalImageUri,
+    setCapturedAt,
+    setLatitude,
+    setLongitude,
+    clearDraft,
+  } = useDraftPost()
 
-  // Loading state: permissions are being checked
   if (!permission) {
     return (
       <View style={[styles.container, styles.centered]}>
-        <ActivityIndicator size="large" color="#fff" />
+        <ActivityIndicator size="large" />
         <Text style={styles.helperText}>Loading camera permissions...</Text>
       </View>
     )
   }
 
-  // Permission not granted: show permission request button
   if (!permission.granted) {
     return (
       <View style={[styles.container, styles.centered]}>
         <Text style={styles.helperText}>
           Camera access is required to create a post.
         </Text>
-        <TouchableOpacity
-          style={styles.permissionButton}
-          onPress={requestPermission}
-        >
+
+        <TouchableOpacity style={styles.permissionButton} onPress={requestPermission}>
           <Text style={styles.buttonText}>Grant Camera Permission</Text>
         </TouchableOpacity>
       </View>
@@ -77,11 +84,13 @@ export default function CameraScreen() {
     return (
       <View style={[styles.container, styles.centered]}>
         <Text style={styles.helperText}>Camera preview failed to load.</Text>
+
         <Text style={styles.subHelperText}>
           {Platform.OS === 'android'
             ? 'Android emulators may show a black preview without a configured virtual camera.'
             : 'Please try re-opening this screen.'}
         </Text>
+
         <TouchableOpacity
           style={styles.permissionButton}
           onPress={() => setCameraError(null)}
@@ -92,35 +101,42 @@ export default function CameraScreen() {
     )
   }
 
-  /**
-   * Captures a photo using the camera
-   * 
-   * Prevents multiple simultaneous captures and handles photo quality settings.
-   * Currently logs the photo URI for debugging. Future implementation will
-   * save or upload the photo to the backend.
-   * 
-   * @async
-   */
   const takePicture = async () => {
-    // Prevent multiple captures at once
     if (isTakingPicture) return
+
     setIsTakingPicture(true)
-    
+
     try {
-      // Capture photo with 80% quality for optimal size/quality balance
+      const locationPermission =
+        await Location.requestForegroundPermissionsAsync()
+
+      if (locationPermission.status !== 'granted') {
+        Alert.alert(
+          'Location Required',
+          'Location permission is needed so your echo can be placed on the campus map.'
+        )
+        return
+      }
+
+      const currentLocation = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      })
+
       const photo = await cameraRef.current?.takePictureAsync({
         quality: 0.8,
-        // Keep Android capture path stable on emulators/devices that return black processed frames.
         skipProcessing: Platform.OS === 'android',
         exif: true,
       })
+
       if (!photo?.uri) {
         throw new Error('Camera returned an empty photo result.')
       }
+
       const exifDate =
         photo?.exif?.DateTimeOriginal ||
         photo?.exif?.DateTimeDigitized ||
         photo?.exif?.DateTime
+
       const exifMs = parseExifDate(exifDate)
       const timestampMs = Number.isFinite(photo?.timestamp)
         ? photo.timestamp
@@ -129,49 +145,50 @@ export default function CameraScreen() {
       clearDraft()
       setLocalImageUri(photo.uri)
       setCapturedAt(new Date(timestampMs).toISOString())
+      setLatitude(currentLocation.coords.latitude)
+      setLongitude(currentLocation.coords.longitude)
+
       router.push('/EditPost')
     } catch (error) {
-      console.error('Camera error:', error)
+      console.error('Camera/location error:', error)
+      Alert.alert(
+        'Capture Failed',
+        error.message || 'Could not capture your photo and location.'
+      )
     } finally {
-      // Re-enable capture button
       setIsTakingPicture(false)
     }
   }
 
-  // Main camera view with preview and controls
   return (
     <View style={styles.container}>
-      {/* Camera preview container with back button overlay */}
       <View style={styles.cameraContainer}>
         <CameraView
-          style={styles.camera}
           ref={cameraRef}
+          style={styles.camera}
+          facing="back"
           onMountError={(event) => {
             const message = event?.nativeEvent?.message || 'Unknown camera error.'
             setCameraError(message)
             console.error('Camera mount error:', message)
           }}
         />
+
         <BackButton goBack={() => router.back()} />
+
+        <TouchableOpacity
+          style={styles.captureButton}
+          onPress={takePicture}
+          disabled={isTakingPicture}
+        >
+          <View style={styles.buttonInner} />
+        </TouchableOpacity>
       </View>
-      
-      {/* Capture button - styled as circular shutter button */}
-      <TouchableOpacity
-        style={styles.captureButton}
-        onPress={takePicture}
-        disabled={isTakingPicture}
-      >
-        <View style={styles.buttonInner} />
-      </TouchableOpacity>
     </View>
   )
 }
 
-/**
- * Styles for the camera screen
- */
 const styles = StyleSheet.create({
-  // Main container - full screen with black background
   container: {
     flex: 1,
     backgroundColor: '#000',
@@ -182,12 +199,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     gap: 14,
   },
-  // Container for camera preview with absolute positioning support
   cameraContainer: {
     flex: 1,
     position: 'relative',
   },
-  // Camera preview fills its container
   camera: {
     flex: 1,
   },

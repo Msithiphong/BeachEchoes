@@ -1,25 +1,32 @@
-import React, { createContext, useContext, useState } from 'react';
-import { DEFAULT_POST_CATEGORY } from '../config/postCategories';
+import React, { createContext, useContext, useState } from 'react'
+import { DEFAULT_POST_CATEGORY } from '../config/postCategories'
 
-const DraftPostContext = createContext(null);
+const DraftPostContext = createContext(null)
 
 export function DraftPostProvider({ children }) {
-  const [localImageUri, setLocalImageUri] = useState(null);
-  const [overlayText, setOverlayText] = useState('');
-  const [isAnonymous, setIsAnonymous] = useState(false);
-  const [mapX, setMapX] = useState(null);
-  const [mapY, setMapY] = useState(null);
-  const [capturedAt, setCapturedAt] = useState(null);
-  const [category, setCategory] = useState(DEFAULT_POST_CATEGORY);
+  const [localImageUri, setLocalImageUri] = useState(null)
+  const [overlayText, setOverlayText] = useState('')
+  const [isAnonymous, setIsAnonymous] = useState(false)
+
+  const [mapX, setMapX] = useState(null)
+  const [mapY, setMapY] = useState(null)
+
+  const [latitude, setLatitude] = useState(null)
+  const [longitude, setLongitude] = useState(null)
+
+  const [capturedAt, setCapturedAt] = useState(null)
+  const [category, setCategory] = useState(DEFAULT_POST_CATEGORY)
 
   function clearDraft() {
-    setLocalImageUri(null);
-    setOverlayText('');
-    setIsAnonymous(false);
-    setMapX(null);
-    setMapY(null);
-    setCapturedAt(null);
-    setCategory(DEFAULT_POST_CATEGORY);
+    setLocalImageUri(null)
+    setOverlayText('')
+    setIsAnonymous(false)
+    setMapX(null)
+    setMapY(null)
+    setLatitude(null)
+    setLongitude(null)
+    setCapturedAt(null)
+    setCategory(DEFAULT_POST_CATEGORY)
   }
 
   return (
@@ -35,6 +42,10 @@ export function DraftPostProvider({ children }) {
         setMapX,
         mapY,
         setMapY,
+        latitude,
+        setLatitude,
+        longitude,
+        setLongitude,
         capturedAt,
         setCapturedAt,
         category,
@@ -44,13 +55,15 @@ export function DraftPostProvider({ children }) {
     >
       {children}
     </DraftPostContext.Provider>
-  );
+  )
 }
 
 export function useDraftPost() {
-  const ctx = useContext(DraftPostContext);
+  const ctx = useContext(DraftPostContext)
+
   if (!ctx) {
-    throw new Error('useDraftPost must be used inside DraftPostProvider');
+    throw new Error('useDraftPost must be used inside DraftPostProvider')
   }
-  return ctx;
+
+  return ctx
 }
