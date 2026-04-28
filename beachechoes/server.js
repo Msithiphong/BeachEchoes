@@ -225,7 +225,7 @@ app.get('/api/profile/:userId', async (req, res) => {
     const { userId } = req.params // This is firebase_uid
 
     const result = await sql`
-      SELECT user_id AS id, firebase_uid, name, bio, avatar_url, profile_visibility
+      SELECT user_id AS id, firebase_uid, name, bio, avatar_url
       FROM users
       WHERE firebase_uid = ${userId}
     `
@@ -242,16 +242,16 @@ app.get('/api/profile/:userId', async (req, res) => {
       SELECT COUNT(*)::int AS count FROM posts WHERE user_id = ${neonId} AND is_deleted = FALSE
     `
 
-    // Following = people this user follows (user_id = me, status = accepted)
+    // Following = people this user follows
     const followingResult = await sql`
       SELECT COUNT(*)::int AS count FROM friendships
-      WHERE user_id = ${neonId} AND status = 'accepted'
+      WHERE user_id = ${neonId}
     `
 
-    // Followers = people who follow this user (friend_id = me, status = accepted)
+    // Followers = people who follow this user
     const followersResult = await sql`
       SELECT COUNT(*)::int AS count FROM friendships
-      WHERE friend_id = ${neonId} AND status = 'accepted'
+      WHERE friend_id = ${neonId}
     `
 
     profile.echoes_count = echoesResult[0]?.count ?? 0
@@ -274,22 +274,16 @@ app.put('/api/profile/:userId', requireFirebaseAuth, async (req, res) => {
       return res.status(403).json({ success: false, error: 'Forbidden' })
     }
 
-    const { name, bio, avatarUrl, profileVisibility } = req.body
-    
-    // Validate profileVisibility if provided
-    if (profileVisibility && !['public', 'private'].includes(profileVisibility)) {
-      return res.status(400).json({ success: false, error: 'Invalid profile visibility value' })
-    }
+    const { name, bio, avatarUrl } = req.body
 
     const result = await sql`
       UPDATE users
       SET 
         name = ${name}, 
         bio = ${bio}, 
-        avatar_url = ${avatarUrl || null},
-        profile_visibility = COALESCE(${profileVisibility || null}, profile_visibility)
+        avatar_url = ${avatarUrl || null}
       WHERE firebase_uid = ${authedUid}
-      RETURNING user_id AS id, firebase_uid, name, bio, avatar_url, profile_visibility
+      RETURNING user_id AS id, firebase_uid, name, bio, avatar_url
     `
 
     res.json({ success: true, profile: result[0] })
@@ -324,7 +318,6 @@ async function resolveViewerUserId(req) {
 
 // Notification types (extensible for future use)
 const NOTIFICATION_TYPES = {
-  FRIEND_REQUEST: 'friend_request',
   POST_LIKED: 'post_liked',
   POST_EXPIRED: 'post_expired',
   NEW_FOLLOWER: 'new_follower'
@@ -341,17 +334,6 @@ const MAX_NOTIFICATIONS_PER_USER = 15
  */
 async function createNotification(userId, type, data, fromUserId = null) {
   try {
-    // Validate friend_request notifications have required fields
-    if (type === NOTIFICATION_TYPES.FRIEND_REQUEST) {
-      if (!data.from_firebase_uid) {
-        console.warn('Malformed friend_request notification: missing from_firebase_uid', { userId, data });
-        // Still create the notification but log the issue for debugging
-      }
-      if (!fromUserId) {
-        console.warn('Malformed friend_request notification: missing fromUserId parameter', { userId, data });
-      }
-    }
-
     // Insert new notification
     await sql`
       INSERT INTO notifications (user_id, type, data, created_at, read, from_user_id)
@@ -438,7 +420,8 @@ app.post('/api/notifications/read', requireFirebaseAuth, async (req, res) => {
 // ------------------ END NOTIFICATIONS ------------------
 
 // GET friendship status between the authed user and another user
-// Returns relationship state: self, none, following, requested, incoming_request, declined
+// Returns relationship state: self, none, following
+// This is a ONE-WAY check: current user → target user
 app.get('/api/friendships/status/:friendUid', requireFirebaseAuth, async (req, res) => {
   try {
     const myId = await resolveUserId(req.firebase.uid)
@@ -453,44 +436,14 @@ app.get('/api/friendships/status/:friendUid', requireFirebaseAuth, async (req, r
       return res.json({ success: true, relationship: 'self' })
     }
 
-    // Check for relationship in both directions
+    // Check for relationship from me (auth user) to them (target user) only
     const rows = await sql`
-      SELECT user_id, friend_id, status
+      SELECT 1
       FROM friendships
-      WHERE (user_id = ${myId} AND friend_id = ${friendId})
-         OR (user_id = ${friendId} AND friend_id = ${myId})
+      WHERE user_id = ${myId} AND friend_id = ${friendId}
     `
 
-    if (!rows.length) {
-      return res.json({ success: true, relationship: 'none' })
-    }
-
-    // Determine relationship state based on who initiated and status
-    const row = rows[0]
-    const iSent = row.user_id === myId
-    
-    let relationship
-    if (iSent) {
-      // I sent the request
-      if (row.status === 'accepted') {
-        relationship = 'following'
-      } else if (row.status === 'pending') {
-        relationship = 'requested'
-      } else if (row.status === 'declined') {
-        relationship = 'declined'
-      } else {
-        relationship = 'none'
-      }
-    } else {
-      // They sent the request to me
-      if (row.status === 'accepted') {
-        relationship = 'following' // They follow me, so from my perspective I'm being followed
-      } else if (row.status === 'pending') {
-        relationship = 'incoming_request'
-      } else {
-        relationship = 'none'
-      }
-    }
+    const relationship = rows.length ? 'following' : 'none'
 
     res.json({ success: true, relationship })
   } catch (error) {
@@ -499,7 +452,7 @@ app.get('/api/friendships/status/:friendUid', requireFirebaseAuth, async (req, r
   }
 })
 
-// POST follow (send a friend/follow request)
+// POST follow (instant follow without approval)
 app.post('/api/friendships/follow', requireFirebaseAuth, async (req, res) => {
   try {
     const { friendUid } = req.body
@@ -517,83 +470,31 @@ app.post('/api/friendships/follow', requireFirebaseAuth, async (req, res) => {
       return res.status(400).json({ success: false, error: 'Cannot follow yourself' })
     }
 
-    // Check target user's profile visibility to determine initial status
-    const targetUser = await sql`
-      SELECT profile_visibility FROM users WHERE user_id = ${friendId}
-    `
-    
-    if (!targetUser.length) {
-      return res.status(404).json({ success: false, error: 'Target user not found' })
-    }
-
-    // Public profiles: auto-accept, Private profiles: pending
-    const profileVisibility = targetUser[0].profile_visibility || 'public'
-    const initialStatus = profileVisibility === 'private' ? 'pending' : 'accepted'
-
-    // Insert or update friendship:
-    // - If no row exists, insert with appropriate status based on profile visibility
-    // - If row exists with status='declined', update status and timestamp
-    // - If row exists with other status, do nothing
+    // Insert friendship (instant follow, no approval needed)
     const insertResult = await sql`
-      INSERT INTO friendships (user_id, friend_id, status, created_at, updated_at)
-      VALUES (${myId}, ${friendId}, ${initialStatus}, NOW(), NOW())
-      ON CONFLICT (user_id, friend_id)
-      DO UPDATE SET
-        status = CASE
-          WHEN friendships.status = 'declined' THEN ${initialStatus}
-          ELSE friendships.status
-        END,
-        updated_at = CASE
-          WHEN friendships.status = 'declined' THEN NOW()
-          ELSE friendships.updated_at
-        END
-      RETURNING user_id, status, (xmax = 0) AS inserted
+      INSERT INTO friendships (user_id, friend_id, created_at, updated_at)
+      VALUES (${myId}, ${friendId}, NOW(), NOW())
+      ON CONFLICT (user_id, friend_id) DO NOTHING
+      RETURNING user_id, (xmax = 0) AS inserted
     `
 
-    const resultStatus = insertResult[0]?.status || initialStatus
-
-    // Create notification for the target user
-    if (insertResult.length > 0) {
-      const wasInsertedOrUpdated = insertResult[0].inserted || resultStatus === initialStatus
+    // Create notification for the target user if this is a new follow
+    if (insertResult.length > 0 && insertResult[0].inserted) {
+      const senderInfo = await sql`
+        SELECT name, avatar_url FROM users WHERE user_id = ${myId}
+      `
       
-      if (wasInsertedOrUpdated) {
-        const senderInfo = await sql`
-          SELECT name, avatar_url FROM users WHERE user_id = ${myId}
-        `
-        
-        if (senderInfo.length > 0) {
-          if (resultStatus === 'pending') {
-            // Private profile: send friend request notification (actionable)
-            const existingNotification = await sql`
-              SELECT id FROM notifications
-              WHERE user_id = ${friendId}
-                AND from_user_id = ${myId}
-                AND type = ${NOTIFICATION_TYPES.FRIEND_REQUEST}
-                AND (data->>'status') IS DISTINCT FROM 'declined'
-            `
-            
-            if (existingNotification.length === 0) {
-              await createNotification(friendId, NOTIFICATION_TYPES.FRIEND_REQUEST, {
-                from_user_id: myId,
-                from_firebase_uid: req.firebase.uid,
-                from_name: senderInfo[0].name || 'Someone',
-                from_avatar_url: senderInfo[0].avatar_url || null
-              }, myId)
-            }
-          } else if (resultStatus === 'accepted') {
-            // Public profile: send new follower notification (immutable)
-            await createNotification(friendId, NOTIFICATION_TYPES.NEW_FOLLOWER, {
-              from_user_id: myId,
-              from_firebase_uid: req.firebase.uid,
-              from_name: senderInfo[0].name || 'Someone',
-              from_avatar_url: senderInfo[0].avatar_url || null
-            }, myId)
-          }
-        }
+      if (senderInfo.length > 0) {
+        await createNotification(friendId, NOTIFICATION_TYPES.NEW_FOLLOWER, {
+          from_user_id: myId,
+          from_firebase_uid: req.firebase.uid,
+          from_name: senderInfo[0].name || 'Someone',
+          from_avatar_url: senderInfo[0].avatar_url || null
+        }, myId)
       }
     }
 
-    res.json({ success: true, status: resultStatus })
+    res.json({ success: true })
   } catch (error) {
     console.error('Follow error:', error)
     res.status(500).json({ success: false, error: 'Internal server error' })
@@ -616,13 +517,11 @@ app.delete('/api/friendships/unfollow', requireFirebaseAuth, async (req, res) =>
       return res.status(404).json({ success: false, error: 'User not found' })
     }
 
-    // Remove friendship only where I follow them (user_id = me, friend_id = them)
-    // Only remove if status is 'accepted' (actually following)
+    // Remove friendship where I follow them (user_id = me, friend_id = them)
     await sql`
       DELETE FROM friendships
       WHERE user_id = ${myId} 
         AND friend_id = ${friendId}
-        AND status = 'accepted'
     `
 
     res.json({ success: true })
@@ -632,36 +531,7 @@ app.delete('/api/friendships/unfollow', requireFirebaseAuth, async (req, res) =>
   }
 })
 
-// DELETE cancel follow request (remove pending request I sent)
-app.delete('/api/friendships/cancel', requireFirebaseAuth, async (req, res) => {
-  try {
-    const { friendUid } = req.body
-    if (!friendUid) {
-      return res.status(400).json({ success: false, error: 'friendUid is required' })
-    }
 
-    const myId = await resolveUserId(req.firebase.uid)
-    const friendId = await resolveUserId(friendUid)
-
-    if (!myId || !friendId) {
-      return res.status(404).json({ success: false, error: 'User not found' })
-    }
-
-    // Remove friendship only where I sent the request (user_id = me, friend_id = them)
-    // Only remove if status is 'pending' (waiting for approval)
-    await sql`
-      DELETE FROM friendships
-      WHERE user_id = ${myId} 
-        AND friend_id = ${friendId}
-        AND status = 'pending'
-    `
-
-    res.json({ success: true })
-  } catch (error) {
-    console.error('Cancel request error:', error)
-    res.status(500).json({ success: false, error: 'Internal server error' })
-  }
-})
 
 // DELETE remove follower (remove someone from my followers list)
 app.delete('/api/friendships/remove-follower', requireFirebaseAuth, async (req, res) => {
@@ -679,12 +549,10 @@ app.delete('/api/friendships/remove-follower', requireFirebaseAuth, async (req, 
     }
 
     // Remove the relationship where they follow me (user_id = them, friend_id = me)
-    // Only remove if status is 'accepted'
     await sql`
       DELETE FROM friendships
       WHERE user_id = ${followerId} 
         AND friend_id = ${myId}
-        AND status = 'accepted'
     `
 
     res.json({ success: true })
@@ -694,127 +562,9 @@ app.delete('/api/friendships/remove-follower', requireFirebaseAuth, async (req, 
   }
 })
 
-// PUT accept a pending incoming request
-app.put('/api/friendships/accept', requireFirebaseAuth, async (req, res) => {
-  try {
-    const { friendUid } = req.body
-    if (!friendUid) {
-      return res.status(400).json({ success: false, error: 'friendUid is required' })
-    }
-
-    const myId = await resolveUserId(req.firebase.uid)
-    const friendId = await resolveUserId(friendUid)
-
-    if (!myId || !friendId) {
-      return res.status(404).json({ success: false, error: 'User not found' })
-    }
-
-    // Only accept requests that were sent TO me (friend_id = myId)
-    const result = await sql`
-      UPDATE friendships
-      SET status = 'accepted', updated_at = NOW()
-      WHERE user_id = ${friendId} AND friend_id = ${myId} AND status = 'pending'
-      RETURNING *
-    `
-
-    if (!result.length) {
-      return res.status(404).json({ success: false, error: 'No pending request found' })
-    }
-
-    // Update the recipient's (myId) existing friend_request notification to mark it as accepted
-    await sql`
-      UPDATE notifications
-      SET data = data || '{"status": "accepted"}'::jsonb
-      WHERE user_id = ${myId}
-        AND type = ${NOTIFICATION_TYPES.FRIEND_REQUEST}
-        AND data->>'from_firebase_uid' = ${friendUid}
-    `
-
-    // Notify the sender that their request was accepted
-    const acceptorInfo = await sql`
-      SELECT name, avatar_url FROM users WHERE user_id = ${myId}
-    `
-    if (acceptorInfo.length > 0) {
-      await createNotification(friendId, NOTIFICATION_TYPES.FRIEND_REQUEST, {
-        from_user_id: myId,
-        from_firebase_uid: req.firebase.uid,
-        from_name: acceptorInfo[0].name || 'Someone',
-        from_avatar_url: acceptorInfo[0].avatar_url || null,
-        accepted: true
-      }, myId)
-    }
-
-    res.json({ success: true, status: 'accepted' })
-  } catch (error) {
-    console.error('Accept friendship error:', error)
-    res.status(500).json({ success: false, error: 'Internal server error' })
-  }
-})
-
-// PUT decline a pending incoming request
-app.put('/api/friendships/decline', requireFirebaseAuth, async (req, res) => {
-  try {
-    const { friendUid } = req.body
-    if (!friendUid) {
-      return res.status(400).json({ success: false, error: 'friendUid is required' })
-    }
-
-    const myId = await resolveUserId(req.firebase.uid)
-    const friendId = await resolveUserId(friendUid)
-
-    if (!myId || !friendId) {
-      return res.status(404).json({ success: false, error: 'User not found' })
-    }
-
-    // Only decline requests that were sent TO me (friend_id = myId)
-    const result = await sql`
-      UPDATE friendships
-      SET status = 'declined', updated_at = NOW()
-      WHERE user_id = ${friendId} AND friend_id = ${myId} AND status = 'pending'
-      RETURNING *
-    `
-
-    if (!result.length) {
-      return res.status(404).json({ success: false, error: 'No pending request found' })
-    }
-
-    // Update the friend request notification to mark as declined instead of deleting
-    // This allows the unique index to permit new requests after decline
-    await sql`
-      UPDATE notifications
-      SET data = data || '{"status": "declined"}'::jsonb
-      WHERE user_id = ${myId}
-        AND type = ${NOTIFICATION_TYPES.FRIEND_REQUEST}
-        AND from_user_id = ${friendId}
-    `
-
-    res.json({ success: true, status: 'declined' })
-  } catch (error) {
-    console.error('Decline friendship error:', error)
-    res.status(500).json({ success: false, error: 'Internal server error' })
-  }
-})
-
 // ------------------ END FRIENDSHIPS ------------------
 
-// GET /api/friendships/pending — incoming pending friend requests for the authed user
-app.get('/api/friendships/pending', requireFirebaseAuth, async (req, res) => {
-  try {
-    const myId = await resolveUserId(req.firebase.uid)
-    if (!myId) return res.json({ success: true, requests: [] })
 
-    const rows = await sql`
-      SELECT u.firebase_uid, u.name, u.avatar_url
-      FROM friendships f
-      JOIN users u ON u.user_id = f.user_id
-      WHERE f.friend_id = ${myId} AND f.status = 'pending'
-    `
-    res.json({ success: true, requests: rows })
-  } catch (err) {
-    console.error('Pending requests error:', err)
-    res.status(500).json({ success: false, error: 'Internal server error' })
-  }
-})
 
 // -------------------- FOLLOWERS / FOLLOWING LISTS --------------------
 
@@ -831,7 +581,6 @@ app.get('/api/friendships/following/:firebaseUid', async (req, res) => {
       FROM friendships f
       JOIN users u ON u.user_id = f.friend_id
       WHERE f.user_id = ${userId}
-        AND f.status = 'accepted'
       ORDER BY u.name ASC
     `
     res.json({ success: true, users: rows })
@@ -853,8 +602,7 @@ app.get('/api/friendships/followers/:firebaseUid', async (req, res) => {
       SELECT u.firebase_uid, u.name, u.avatar_url
       FROM friendships f
       JOIN users u ON u.user_id = f.user_id
-      WHERE f.friend_id = ${userId} 
-        AND f.status = 'accepted'
+      WHERE f.friend_id = ${userId}
       ORDER BY u.name ASC
     `
     res.json({ success: true, users: rows })

@@ -39,7 +39,7 @@ export default function UserProfile() {
   const [followingCount, setFollowingCount] = useState(0)
   const [followersCount, setFollowersCount] = useState(0)
 
-  // Relationship state: self | none | following | requested | incoming_request | declined
+  // Relationship state: self | none | following
   const [relationship, setRelationship] = useState('none')
   const [friendshipLoading, setFriendshipLoading] = useState(false)
   const [muted, setMuted] = useState(false)
@@ -121,7 +121,7 @@ export default function UserProfile() {
       const data = await res.json()
 
       if (data?.success) {
-        // Backend returns: self, none, following, requested, incoming_request, declined
+        // Backend returns: self, none, following (one-way: current user → viewed user)
         setRelationship(data.relationship || 'none')
       }
     } catch (err) {
@@ -193,19 +193,15 @@ export default function UserProfile() {
       const data = await res.json()
 
       if (data?.success) {
-        // Backend returns status: 'accepted' (public profile) or 'pending' (private profile)
-        if (data.status === 'accepted') {
-          setRelationship('following')
-        } else {
-          setRelationship('requested')
-        }
+        // Follow is instant (no approval required)
+        setRelationship('following')
         await fetchProfile()
       } else {
         Alert.alert('Error', data?.error || 'Failed to follow')
       }
     } catch (err) {
       console.error('Follow error:', err)
-      Alert.alert('Error', 'Failed to send follow request')
+      Alert.alert('Error', 'Failed to follow')
     } finally {
       setFriendshipLoading(false)
     }
@@ -251,89 +247,14 @@ export default function UserProfile() {
     }
   }
 
-  const handleCancelRequest = () => {
-    Alert.alert(
-      'Cancel Request',
-      `Cancel your follow request to ${name}?`,
-      [
-        { text: 'No', style: 'cancel' },
-        { text: 'Yes', style: 'destructive', onPress: confirmCancelRequest },
-      ]
-    )
-  }
 
-  const confirmCancelRequest = async () => {
-    try {
-      setFriendshipLoading(true)
-      const token = await getToken()
-
-      const res = await fetch(`${API_BASE}/friendships/cancel`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ friendUid: userId }),
-      })
-      const data = await res.json()
-
-      if (data?.success) {
-        setRelationship('none')
-        await fetchProfile()
-      } else {
-        Alert.alert('Error', data?.error || 'Failed to cancel request')
-      }
-    } catch (err) {
-      console.error('Cancel request error:', err)
-      Alert.alert('Error', 'Failed to cancel request')
-    } finally {
-      setFriendshipLoading(false)
-    }
-  }
-
-  const handleAccept = async () => {
-    try {
-      setFriendshipLoading(true)
-      const token = await getToken()
-
-      const res = await fetch(`${API_BASE}/friendships/accept`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ friendUid: userId }),
-      })
-      const data = await res.json()
-
-      if (data?.success) {
-        setRelationship('following')
-        await fetchProfile()
-      } else {
-        Alert.alert('Error', data?.error || 'Failed to accept request')
-      }
-    } catch (err) {
-      console.error('Accept error:', err)
-      Alert.alert('Error', 'Failed to accept request')
-    } finally {
-      setFriendshipLoading(false)
-    }
-  }
 
   // Determine follow button label, action, and disabled state based on relationship
   const getFollowButton = () => {
-    switch (relationship) {
-      case 'following':
-        return { label: 'Following', onPress: handleUnfollow, disabled: false, mode: 'outlined' }
-      case 'requested':
-        return { label: 'Requested', onPress: handleCancelRequest, disabled: false, mode: 'outlined' }
-      case 'incoming_request':
-        return { label: 'Accept Request', onPress: handleAccept, disabled: false, mode: 'contained' }
-      case 'declined':
-      case 'none':
-      default:
-        return { label: 'Follow', onPress: handleFollow, disabled: false, mode: 'contained' }
+    if (relationship === 'following') {
+      return { label: 'Following', onPress: handleUnfollow, disabled: false, mode: 'outlined' }
     }
+    return { label: 'Follow', onPress: handleFollow, disabled: false, mode: 'contained' }
   }
 
   if (loading) {
@@ -419,7 +340,7 @@ export default function UserProfile() {
           </TouchableOpacity>
         </View>
 
-        {/* Follow / Requested / Following / Accept Request button */}
+        {/* Follow / Following button */}
         {currentUser?.uid !== userId && relationship !== 'self' && (
           <Button
             mode={followBtn.mode}
