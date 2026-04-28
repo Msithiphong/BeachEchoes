@@ -8,6 +8,8 @@ export default function ImageCard({
   image, 
   children, 
   username, 
+  ownerFirebaseUid = null,
+  onUsernamePress,
   likeCount = 0, 
   postId, 
   initialLiked = false,
@@ -176,7 +178,15 @@ export default function ImageCard({
             </Animated.View>
 
             {username && (
-              <Text style={styles.username}>@{username}</Text>
+              <TouchableOpacity
+                style={styles.usernameTouchable}
+                onPress={() => {
+                  if (ownerFirebaseUid && onUsernamePress) onUsernamePress(ownerFirebaseUid)
+                }}
+                disabled={!ownerFirebaseUid || !onUsernamePress}
+              >
+                <Text style={styles.usernameText}>@{username}</Text>
+              </TouchableOpacity>
             )}
 
             {/* Like button */}
@@ -224,6 +234,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: 'rgba(0, 0, 0, 0.35)',
     padding: 16,
+    paddingBottom: 44,
     width: '100%',
   },
   text: {
@@ -232,14 +243,18 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     textAlign: 'center',
     flexWrap: 'wrap',
+    paddingHorizontal: 8,
   },
-  username: {
-    color: '#ffffff',
-    fontSize: 16,
-    fontWeight: 'bold',
+  usernameTouchable: {
     position: 'absolute',
     bottom: 10,
     left: 12,
+  },
+  usernameText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: 'bold',
+    textDecorationLine: 'underline',
   },
   bigHeart: {
     position: 'absolute',
