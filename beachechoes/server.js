@@ -318,6 +318,14 @@ const MAX_NOTIFICATIONS_PER_USER = 15
  */
 async function createNotification(userId, type, data) {
   try {
+    // Validate friend_request notifications have required fields
+    if (type === NOTIFICATION_TYPES.FRIEND_REQUEST) {
+      if (!data.from_firebase_uid) {
+        console.warn('Malformed friend_request notification: missing from_firebase_uid', { userId, data });
+        // Still create the notification but log the issue for debugging
+      }
+    }
+
     // Insert new notification
     await sql`
       INSERT INTO notifications (user_id, type, data, created_at, read)
@@ -455,25 +463,43 @@ app.post('/api/friendships/follow', requireFirebaseAuth, async (req, res) => {
       return res.status(400).json({ success: false, error: 'Cannot follow yourself' })
     }
 
-    // Insert pending friendship (ignore if already exists)
+    // Insert or update friendship:
+    // - If no row exists, insert with status='pending'
+    // - If row exists with status='declined', update to status='pending' and update timestamp
+    // - If row exists with other status, do nothing
     const insertResult = await sql`
-      INSERT INTO friendships (user_id, friend_id, status)
-      VALUES (${myId}, ${friendId}, 'pending')
-      ON CONFLICT (user_id, friend_id) DO NOTHING
-      RETURNING user_id
+      INSERT INTO friendships (user_id, friend_id, status, created_at, updated_at)
+      VALUES (${myId}, ${friendId}, 'pending', NOW(), NOW())
+      ON CONFLICT (user_id, friend_id)
+      DO UPDATE SET
+        status = CASE
+          WHEN friendships.status = 'declined' THEN 'pending'
+          ELSE friendships.status
+        END,
+        updated_at = CASE
+          WHEN friendships.status = 'declined' THEN NOW()
+          ELSE friendships.updated_at
+        END
+      RETURNING user_id, status, (xmax = 0) AS inserted
     `
 
-    // Create notification for the friend request recipient (if new request)
+    // Create notification for the friend request recipient
+    // Only send notification if this is a new request or re-send after decline
     if (insertResult.length > 0) {
-      const senderInfo = await sql`
-        SELECT name, avatar_url FROM users WHERE user_id = ${myId}
-      `
-      if (senderInfo.length > 0) {
-        await createNotification(friendId, NOTIFICATION_TYPES.FRIEND_REQUEST, {
-          from_user_id: myId,
-          from_name: senderInfo[0].name || 'Someone',
-          from_avatar_url: senderInfo[0].avatar_url || null
-        })
+      const wasInsertedOrUpdated = insertResult[0].inserted || insertResult[0].status === 'pending'
+      
+      if (wasInsertedOrUpdated) {
+        const senderInfo = await sql`
+          SELECT name, avatar_url FROM users WHERE user_id = ${myId}
+        `
+        if (senderInfo.length > 0) {
+          await createNotification(friendId, NOTIFICATION_TYPES.FRIEND_REQUEST, {
+            from_user_id: myId,
+            from_firebase_uid: req.firebase.uid,
+            from_name: senderInfo[0].name || 'Someone',
+            from_avatar_url: senderInfo[0].avatar_url || null
+          })
+        }
       }
     }
 
@@ -531,7 +557,7 @@ app.put('/api/friendships/accept', requireFirebaseAuth, async (req, res) => {
     // Only accept requests that were sent TO me (friend_id = myId)
     const result = await sql`
       UPDATE friendships
-      SET status = 'accepted'
+      SET status = 'accepted', updated_at = NOW()
       WHERE user_id = ${friendId} AND friend_id = ${myId} AND status = 'pending'
       RETURNING *
     `
@@ -540,9 +566,74 @@ app.put('/api/friendships/accept', requireFirebaseAuth, async (req, res) => {
       return res.status(404).json({ success: false, error: 'No pending request found' })
     }
 
+    // Update the recipient's (myId) existing friend_request notification to mark it as accepted
+    await sql`
+      UPDATE notifications
+      SET data = data || '{"status": "accepted"}'::jsonb
+      WHERE user_id = ${myId}
+        AND type = ${NOTIFICATION_TYPES.FRIEND_REQUEST}
+        AND data->>'from_firebase_uid' = ${friendUid}
+    `
+
+    // Notify the sender that their request was accepted
+    const acceptorInfo = await sql`
+      SELECT name, avatar_url FROM users WHERE user_id = ${myId}
+    `
+    if (acceptorInfo.length > 0) {
+      await createNotification(friendId, NOTIFICATION_TYPES.FRIEND_REQUEST, {
+        from_user_id: myId,
+        from_firebase_uid: req.firebase.uid,
+        from_name: acceptorInfo[0].name || 'Someone',
+        from_avatar_url: acceptorInfo[0].avatar_url || null,
+        accepted: true
+      })
+    }
+
     res.json({ success: true, status: 'accepted' })
   } catch (error) {
     console.error('Accept friendship error:', error)
+    res.status(500).json({ success: false, error: 'Internal server error' })
+  }
+})
+
+// PUT decline a pending incoming request
+app.put('/api/friendships/decline', requireFirebaseAuth, async (req, res) => {
+  try {
+    const { friendUid } = req.body
+    if (!friendUid) {
+      return res.status(400).json({ success: false, error: 'friendUid is required' })
+    }
+
+    const myId = await resolveUserId(req.firebase.uid)
+    const friendId = await resolveUserId(friendUid)
+
+    if (!myId || !friendId) {
+      return res.status(404).json({ success: false, error: 'User not found' })
+    }
+
+    // Only decline requests that were sent TO me (friend_id = myId)
+    const result = await sql`
+      UPDATE friendships
+      SET status = 'declined', updated_at = NOW()
+      WHERE user_id = ${friendId} AND friend_id = ${myId} AND status = 'pending'
+      RETURNING *
+    `
+
+    if (!result.length) {
+      return res.status(404).json({ success: false, error: 'No pending request found' })
+    }
+
+    // Remove the friend request notification from the recipient's notifications
+    await sql`
+      DELETE FROM notifications
+      WHERE user_id = ${myId}
+        AND type = ${NOTIFICATION_TYPES.FRIEND_REQUEST}
+        AND data->>'from_user_id' = ${friendId.toString()}
+    `
+
+    res.json({ success: true, status: 'declined' })
+  } catch (error) {
+    console.error('Decline friendship error:', error)
     res.status(500).json({ success: false, error: 'Internal server error' })
   }
 })

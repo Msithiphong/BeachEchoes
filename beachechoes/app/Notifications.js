@@ -96,15 +96,11 @@ export default function Notifications() {
     try {
       const token = await auth.currentUser?.getIdToken()
       
-      // Get firebase_uid from user_id
-      const userRes = await fetch(`${API_BASE}/users/search?q=`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      const userData = await userRes.json()
-      const requester = userData.users?.find(u => u.user_id === notification.data.from_user_id)
+      // Use firebase_uid from notification data
+      const friendFirebaseUid = notification.data.from_firebase_uid
       
-      if (!requester) {
-        Alert.alert('Error', 'Could not find user')
+      if (!friendFirebaseUid) {
+        Alert.alert('Error', 'Invalid notification data')
         return
       }
 
@@ -114,7 +110,7 @@ export default function Notifications() {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ friendUid: requester.firebase_uid }),
+        body: JSON.stringify({ friendUid: friendFirebaseUid }),
       })
       const data = await res.json()
       if (data?.success) {
@@ -131,29 +127,25 @@ export default function Notifications() {
     try {
       const token = await auth.currentUser?.getIdToken()
       
-      // Get firebase_uid from user_id
-      const userRes = await fetch(`${API_BASE}/users/search?q=`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      const userData = await userRes.json()
-      const requester = userData.users?.find(u => u.user_id === notification.data.from_user_id)
+      // Use firebase_uid from notification data
+      const friendFirebaseUid = notification.data.from_firebase_uid
       
-      if (!requester) {
-        Alert.alert('Error', 'Could not find user')
+      if (!friendFirebaseUid) {
+        Alert.alert('Error', 'Invalid notification data')
         return
       }
 
-      const res = await fetch(`${API_BASE}/friendships/unfollow`, {
-        method: 'DELETE',
+      const res = await fetch(`${API_BASE}/friendships/decline`, {
+        method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ friendUid: requester.firebase_uid }),
+        body: JSON.stringify({ friendUid: friendFirebaseUid }),
       })
       const data = await res.json()
       if (data?.success) {
-        await markAsRead([notification.id])
+        // Notification is automatically removed by backend
         fetchNotifications(true)
       }
     } catch (err) {
@@ -184,26 +176,33 @@ export default function Notifications() {
               />
               <View style={styles.nameContainer}>
                 <Text style={styles.userName}>{item.data.from_name}</Text>
-                <Text style={styles.subtitle}>Wants to follow you</Text>
+                <Text style={styles.subtitle}>
+                  {item.data.status === 'accepted' 
+                    ? 'Friend request accepted' 
+                    : 'Wants to follow you'}
+                </Text>
                 <Text style={styles.timeText}>
                   {new Date(item.created_at).toLocaleDateString()}
                 </Text>
               </View>
             </View>
-            <View style={styles.actions}>
-              <TouchableOpacity
-                style={styles.acceptButton}
-                onPress={() => handleAcceptFriendRequest(item)}
-              >
-                <Text style={styles.acceptText}>Accept</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.declineButton}
-                onPress={() => handleDeclineFriendRequest(item)}
-              >
-                <Text style={styles.declineText}>Decline</Text>
-              </TouchableOpacity>
-            </View>
+            {/* Only show action buttons if notification has valid from_firebase_uid and not already accepted */}
+            {item.data.from_firebase_uid && item.data.status !== 'accepted' && (
+              <View style={styles.actions}>
+                <TouchableOpacity
+                  style={styles.acceptButton}
+                  onPress={() => handleAcceptFriendRequest(item)}
+                >
+                  <Text style={styles.acceptText}>Accept</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.declineButton}
+                  onPress={() => handleDeclineFriendRequest(item)}
+                >
+                  <Text style={styles.declineText}>Decline</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </>
         )}
 
