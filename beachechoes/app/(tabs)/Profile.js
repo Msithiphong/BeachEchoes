@@ -28,6 +28,7 @@ export default function Profile() {
   const [avatarUrl, setAvatarUrl] = useState(null)
 
   const [anonymousEchoes, setAnonymousEchoes] = useState(false)
+  const [profilePrivate, setProfilePrivate] = useState(false)
 
   const [neonUserId, setNeonUserId] = useState(null)
   const [posts, setPosts] = useState([])
@@ -67,6 +68,10 @@ export default function Profile() {
           false
 
         setAnonymousEchoes(!!pref)
+
+        // Get profile visibility setting (default to public)
+        const visibility = data.profile.profile_visibility ?? 'public'
+        setProfilePrivate(visibility === 'private')
 
         // Store neon user_id and fetch posts
         if (data.profile.id) {
@@ -121,6 +126,7 @@ export default function Profile() {
         // recommended keys
         avatar_url: avatarUrl,
         anonymous_echoes: anonymousEchoes,
+        profileVisibility: profilePrivate ? 'private' : 'public',
       }
 
       const res = await fetch(`${API_BASE}/profile/${user.uid}`, {
@@ -288,18 +294,31 @@ export default function Profile() {
             <Text style={styles.bioText}>{bio || 'No bio yet'}</Text>
           )}
 
-          {/* Toggle only in edit mode */}
+          {/* Toggles only in edit mode */}
           {editing && (
-            <View style={styles.toggleRow}>
-              <View style={styles.toggleTextCol}>
-                <Text style={styles.toggleTitle}>Post Echoes anonymously</Text>
-                <Text style={styles.toggleSubtitle}>
-                  When enabled, your username won’t show on new Echoes.
-                </Text>
+            <>
+              <View style={styles.toggleRow}>
+                <View style={styles.toggleTextCol}>
+                  <Text style={styles.toggleTitle}>Post Echoes anonymously</Text>
+                  <Text style={styles.toggleSubtitle}>
+                    When enabled, your username won't show on new Echoes.
+                  </Text>
+                </View>
+
+                <Switch value={anonymousEchoes} onValueChange={setAnonymousEchoes} disabled={saving} />
               </View>
 
-              <Switch value={anonymousEchoes} onValueChange={setAnonymousEchoes} disabled={saving} />
-            </View>
+              <View style={styles.toggleRow}>
+                <View style={styles.toggleTextCol}>
+                  <Text style={styles.toggleTitle}>Set Profile to Private</Text>
+                  <Text style={styles.toggleSubtitle}>
+                    Private profiles require approval before others can follow you.
+                  </Text>
+                </View>
+
+                <Switch value={profilePrivate} onValueChange={setProfilePrivate} disabled={saving} />
+              </View>
+            </>
           )}
         </View>
 
