@@ -27,7 +27,11 @@ import {
 } from 'react-native'
 import { useRouter } from 'expo-router'
 import { CameraView, useCameraPermissions } from 'expo-camera'
+<<<<<<< Updated upstream
 import * as Location from 'expo-location'
+=======
+import MaterialIcons from '@expo/vector-icons/MaterialIcons'
+>>>>>>> Stashed changes
 import BackButton from '../../components/BackButton'
 import { theme } from '../../core/theme'
 import { useDraftPost } from '../../context/DraftPostContext'
@@ -48,6 +52,9 @@ export default function CameraScreen() {
 
   const [isTakingPicture, setIsTakingPicture] = useState(false)
   const [cameraError, setCameraError] = useState(null)
+  
+  // State to manage camera facing (front or back)
+  const [facing, setFacing] = useState('back')
 
   const {
     setLocalImageUri,
@@ -101,6 +108,25 @@ export default function CameraScreen() {
     )
   }
 
+<<<<<<< Updated upstream
+=======
+  /**
+   * Toggles between front and back camera
+   */
+  const flipCamera = () => {
+    setFacing(current => (current === 'back' ? 'front' : 'back'))
+  }
+
+  /**
+   * Captures a photo using the camera
+   * 
+   * Prevents multiple simultaneous captures and handles photo quality settings.
+   * Currently logs the photo URI for debugging. Future implementation will
+   * save or upload the photo to the backend.
+   * 
+   * @async
+   */
+>>>>>>> Stashed changes
   const takePicture = async () => {
     if (isTakingPicture) return
 
@@ -165,14 +191,19 @@ export default function CameraScreen() {
       <View style={styles.cameraContainer}>
         <CameraView
           ref={cameraRef}
+<<<<<<< Updated upstream
           style={styles.camera}
           facing="back"
+=======
+          facing={facing}
+>>>>>>> Stashed changes
           onMountError={(event) => {
             const message = event?.nativeEvent?.message || 'Unknown camera error.'
             setCameraError(message)
             console.error('Camera mount error:', message)
           }}
         />
+<<<<<<< Updated upstream
 
         <BackButton goBack={() => router.back()} />
 
@@ -182,6 +213,15 @@ export default function CameraScreen() {
           disabled={isTakingPicture}
         >
           <View style={styles.buttonInner} />
+=======
+        
+        {/* Camera flip button - top right corner */}
+        <TouchableOpacity
+          style={styles.flipButton}
+          onPress={flipCamera}
+        >
+          <MaterialIcons name="flip-camera-ios" size={32} color="#fff" />
+>>>>>>> Stashed changes
         </TouchableOpacity>
       </View>
     </View>
@@ -246,4 +286,19 @@ const styles = StyleSheet.create({
     borderRadius: 30,
     backgroundColor: '#fff',
   },
+<<<<<<< Updated upstream
 })
+=======
+  flipButton: {
+    position: 'absolute',
+    top: 60,
+    right: 20,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+})
+>>>>>>> Stashed changes
