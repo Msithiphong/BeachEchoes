@@ -242,10 +242,13 @@ app.get('/api/profile/:userId', async (req, res) => {
       SELECT COUNT(*)::int AS count FROM posts WHERE user_id = ${neonId} AND is_deleted = FALSE
     `
 
-    // Following = accepted requests this user sent (user_id = me)
+    // Following = accepted connections involving this user.
+    // We count accepted rows in either direction so accepted relationships
+    // are not missed due to request direction.
     const followingResult = await sql`
       SELECT COUNT(*)::int AS count FROM friendships
-      WHERE user_id = ${neonId} AND status = 'accepted'
+      WHERE (user_id = ${neonId} OR friend_id = ${neonId})
+        AND status = 'accepted'
     `
 
     // Followers = accepted requests sent TO this user (friend_id = me)
@@ -673,7 +676,7 @@ app.get('/api/friendships/pending', requireFirebaseAuth, async (req, res) => {
 
 // -------------------- FOLLOWERS / FOLLOWING LISTS --------------------
 
-// GET /api/friendships/following/:firebaseUid  — users this person follows
+// GET /api/friendships/following/:firebaseUid  — accepted connections for this user
 app.get('/api/friendships/following/:firebaseUid', async (req, res) => {
   try {
     const uid = req.params.firebaseUid
@@ -681,10 +684,14 @@ app.get('/api/friendships/following/:firebaseUid', async (req, res) => {
     if (!meId) return res.json({ success: true, users: [] })
 
     const rows = await sql`
-      SELECT u.firebase_uid, u.name, u.avatar_url
+      SELECT DISTINCT u.firebase_uid, u.name, u.avatar_url
       FROM friendships f
-      JOIN users u ON u.user_id = f.friend_id
-      WHERE f.user_id = ${meId} AND f.status = 'accepted'
+      JOIN users u ON u.user_id = CASE
+        WHEN f.user_id = ${meId} THEN f.friend_id
+        ELSE f.user_id
+      END
+      WHERE (f.user_id = ${meId} OR f.friend_id = ${meId})
+        AND f.status = 'accepted'
       ORDER BY u.name ASC
     `
     res.json({ success: true, users: rows })
