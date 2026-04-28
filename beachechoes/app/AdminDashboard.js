@@ -27,8 +27,8 @@ export default function AdminDashboard() {
         setSigningIn(true)
         try {
             await signInWithEmailAndPassword(auth, user.email, user.password)
-            // Auth state change will automatically navigate via AuthContext
-            // No need to manually navigate - the app will redirect to Dashboard
+            // Immediately route to Dashboard after successful sign-in
+            router.replace('/Dashboard')
         } catch (error) {
             console.error(`Sign in error for ${userName}:`, error)
             Alert.alert('Sign In Failed', error.message || `Could not sign in as ${userName}. Please check credentials.`)
@@ -54,7 +54,7 @@ export default function AdminDashboard() {
                         onPress={() => handleTestSignIn(TEST_USER_A, 'User A')}
                         disabled={signingIn}
                     >
-                        {signingIn ? <ActivityIndicator color="#fff" /> : 'Sign in as User A'}
+                        {signingIn ? <ActivityIndicator color="#fff" /> : 'Sign in as Luffy'}
                     </Button>
 
                     <Button
@@ -62,7 +62,7 @@ export default function AdminDashboard() {
                         onPress={() => handleTestSignIn(TEST_USER_B, 'User B')}
                         disabled={signingIn}
                     >
-                        {signingIn ? <ActivityIndicator color="#fff" /> : 'Sign in as User B'}
+                        {signingIn ? <ActivityIndicator color="#fff" /> : 'Sign in as Naruto'}
                     </Button>
                 </>
             )}
