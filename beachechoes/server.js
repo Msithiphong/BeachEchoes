@@ -315,8 +315,9 @@ const MAX_NOTIFICATIONS_PER_USER = 15
  * @param {number} userId - Recipient user ID
  * @param {string} type - Notification type (from NOTIFICATION_TYPES)
  * @param {object} data - Notification-specific data (JSON)
+ * @param {number} fromUserId - (Optional) Sender user ID for friend request notifications
  */
-async function createNotification(userId, type, data) {
+async function createNotification(userId, type, data, fromUserId = null) {
   try {
     // Validate friend_request notifications have required fields
     if (type === NOTIFICATION_TYPES.FRIEND_REQUEST) {
@@ -324,12 +325,15 @@ async function createNotification(userId, type, data) {
         console.warn('Malformed friend_request notification: missing from_firebase_uid', { userId, data });
         // Still create the notification but log the issue for debugging
       }
+      if (!fromUserId) {
+        console.warn('Malformed friend_request notification: missing fromUserId parameter', { userId, data });
+      }
     }
 
     // Insert new notification
     await sql`
-      INSERT INTO notifications (user_id, type, data, created_at, read)
-      VALUES (${userId}, ${type}, ${JSON.stringify(data)}, NOW(), FALSE)
+      INSERT INTO notifications (user_id, type, data, created_at, read, from_user_id)
+      VALUES (${userId}, ${type}, ${JSON.stringify(data)}, NOW(), FALSE, ${fromUserId})
     `
 
     // Enforce max 15 notifications per user (delete oldest if over limit)
@@ -489,16 +493,28 @@ app.post('/api/friendships/follow', requireFirebaseAuth, async (req, res) => {
       const wasInsertedOrUpdated = insertResult[0].inserted || insertResult[0].status === 'pending'
       
       if (wasInsertedOrUpdated) {
-        const senderInfo = await sql`
-          SELECT name, avatar_url FROM users WHERE user_id = ${myId}
+        // Check for existing non-declined notification to prevent duplicates
+        const existingNotification = await sql`
+          SELECT id FROM notifications
+          WHERE user_id = ${friendId}
+            AND from_user_id = ${myId}
+            AND type = ${NOTIFICATION_TYPES.FRIEND_REQUEST}
+            AND (data->>'status') IS DISTINCT FROM 'declined'
         `
-        if (senderInfo.length > 0) {
-          await createNotification(friendId, NOTIFICATION_TYPES.FRIEND_REQUEST, {
-            from_user_id: myId,
-            from_firebase_uid: req.firebase.uid,
-            from_name: senderInfo[0].name || 'Someone',
-            from_avatar_url: senderInfo[0].avatar_url || null
-          })
+        
+        // Only create notification if none exists or previous one was declined
+        if (existingNotification.length === 0) {
+          const senderInfo = await sql`
+            SELECT name, avatar_url FROM users WHERE user_id = ${myId}
+          `
+          if (senderInfo.length > 0) {
+            await createNotification(friendId, NOTIFICATION_TYPES.FRIEND_REQUEST, {
+              from_user_id: myId,
+              from_firebase_uid: req.firebase.uid,
+              from_name: senderInfo[0].name || 'Someone',
+              from_avatar_url: senderInfo[0].avatar_url || null
+            }, myId)
+          }
         }
       }
     }
@@ -586,7 +602,7 @@ app.put('/api/friendships/accept', requireFirebaseAuth, async (req, res) => {
         from_name: acceptorInfo[0].name || 'Someone',
         from_avatar_url: acceptorInfo[0].avatar_url || null,
         accepted: true
-      })
+      }, myId)
     }
 
     res.json({ success: true, status: 'accepted' })
@@ -623,12 +639,14 @@ app.put('/api/friendships/decline', requireFirebaseAuth, async (req, res) => {
       return res.status(404).json({ success: false, error: 'No pending request found' })
     }
 
-    // Remove the friend request notification from the recipient's notifications
+    // Update the friend request notification to mark as declined instead of deleting
+    // This allows the unique index to permit new requests after decline
     await sql`
-      DELETE FROM notifications
+      UPDATE notifications
+      SET data = data || '{"status": "declined"}'::jsonb
       WHERE user_id = ${myId}
         AND type = ${NOTIFICATION_TYPES.FRIEND_REQUEST}
-        AND data->>'from_user_id' = ${friendId.toString()}
+        AND from_user_id = ${friendId}
     `
 
     res.json({ success: true, status: 'declined' })
