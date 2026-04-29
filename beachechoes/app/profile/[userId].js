@@ -2,6 +2,7 @@ import React, { useContext, useEffect, useRef, useState } from 'react'
 import {
   View, Text, Image, StyleSheet,
   ScrollView, Alert, TouchableOpacity,
+  Switch,
 } from 'react-native'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import Background from '../../components/Background'
@@ -30,7 +31,7 @@ export default function UserProfile() {
   const [name, setName] = useState('')
   const [bio, setBio] = useState('')
   const [avatarUrl, setAvatarUrl] = useState(null)
-  const [messages, setMessages] = useState([])
+  const [posts, setPosts] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
@@ -38,16 +39,17 @@ export default function UserProfile() {
   const [followingCount, setFollowingCount] = useState(0)
   const [followersCount, setFollowersCount] = useState(0)
 
-  // Friendship state: null | 'pending' | 'accepted'
-  const [friendshipStatus, setFriendshipStatus] = useState(null)
-  // 'outgoing' = I sent, 'incoming' = they sent
-  const [friendshipDirection, setFriendshipDirection] = useState(null)
+  // Relationship state: self | none | following
+  const [relationship, setRelationship] = useState('none')
   const [friendshipLoading, setFriendshipLoading] = useState(false)
+  const [muted, setMuted] = useState(false)
+  const [muteLoading, setMuteLoading] = useState(false)
 
   useEffect(() => {
     if (!userId) return
     fetchProfile()
     fetchFriendshipStatus()
+    fetchMuteStatus()
   }, [userId])
 
   const getToken = async () => {
@@ -69,7 +71,7 @@ export default function UserProfile() {
         setFollowersCount(data.profile.followers_count ?? 0)
 
         if (data.profile.id) {
-          await fetchMessages(data.profile.id)
+          await fetchPosts(data.profile.id)
         }
       } else {
         setError(data?.error || 'Profile not found')
@@ -82,16 +84,30 @@ export default function UserProfile() {
     }
   }
 
-  const fetchMessages = async (neonUserId) => {
+  const fetchPosts = async (neonUserId) => {
     try {
-      const res = await fetch(`${API_BASE}/messages/user/${neonUserId}`)
+      // Include auth token to get liked status
+      const token = await getToken()
+      const headers = token ? { Authorization: `Bearer ${token}` } : {}
+      
+      const res = await fetch(`${API_BASE}/posts/user/${neonUserId}`, { headers })
       const data = await res.json()
       if (data?.success) {
-        setMessages(data.messages ?? [])
+        setPosts(data.posts ?? [])
       }
     } catch (err) {
-      console.log('Failed to fetch messages:', err)
+      console.log('Failed to fetch posts:', err)
     }
+  }
+
+  const handleLikeToggle = (postId, liked, likeCount) => {
+    setPosts(prevPosts => 
+      prevPosts.map(post => 
+        post.id === postId 
+          ? { ...post, liked, like_count: likeCount }
+          : post
+      )
+    )
   }
 
   const fetchFriendshipStatus = async () => {
@@ -105,11 +121,59 @@ export default function UserProfile() {
       const data = await res.json()
 
       if (data?.success) {
-        setFriendshipStatus(data.status)       // null | 'pending' | 'accepted'
-        setFriendshipDirection(data.direction)  // 'outgoing' | 'incoming' | undefined
+        // Backend returns: self, none, following (one-way: current user → viewed user)
+        setRelationship(data.relationship || 'none')
       }
     } catch (err) {
       console.log('Failed to fetch friendship status:', err)
+    }
+  }
+
+  const fetchMuteStatus = async () => {
+    try {
+      if (!currentUser?.uid || currentUser.uid === userId) {
+        setMuted(false)
+        return
+      }
+      const token = await getToken()
+      if (!token) return
+
+      const res = await fetch(`${API_BASE}/users/${encodeURIComponent(userId)}/mute-status`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const data = await res.json()
+      if (data?.success) {
+        setMuted(!!data.muted)
+      }
+    } catch (err) {
+      console.log('Failed to fetch mute status:', err)
+    }
+  }
+
+  const handleMuteToggle = async (nextMuted) => {
+    try {
+      setMuteLoading(true)
+      const token = await getToken()
+      if (!token) throw new Error('Not authenticated')
+
+      const res = await fetch(`${API_BASE}/users/${encodeURIComponent(userId)}/mute`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ muted: nextMuted }),
+      })
+      const data = await res.json()
+      if (!data?.success) {
+        throw new Error(data?.error || 'Failed to update mute status')
+      }
+      setMuted(!!data.muted)
+    } catch (err) {
+      console.error('Mute toggle error:', err)
+      Alert.alert('Error', 'Could not update mute setting')
+    } finally {
+      setMuteLoading(false)
     }
   }
 
@@ -129,15 +193,15 @@ export default function UserProfile() {
       const data = await res.json()
 
       if (data?.success) {
-        setFriendshipStatus('pending')
-        setFriendshipDirection('outgoing')
+        // Follow is instant (no approval required)
+        setRelationship('following')
         await fetchProfile()
       } else {
         Alert.alert('Error', data?.error || 'Failed to follow')
       }
     } catch (err) {
       console.error('Follow error:', err)
-      Alert.alert('Error', 'Failed to send follow request')
+      Alert.alert('Error', 'Failed to follow')
     } finally {
       setFriendshipLoading(false)
     }
@@ -170,8 +234,7 @@ export default function UserProfile() {
       const data = await res.json()
 
       if (data?.success) {
-        setFriendshipStatus(null)
-        setFriendshipDirection(null)
+        setRelationship('none')
         await fetchProfile()
       } else {
         Alert.alert('Error', data?.error || 'Failed to unfollow')
@@ -184,48 +247,14 @@ export default function UserProfile() {
     }
   }
 
-  const handleAccept = async () => {
-    try {
-      setFriendshipLoading(true)
-      const token = await getToken()
 
-      const res = await fetch(`${API_BASE}/friendships/accept`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ friendUid: userId }),
-      })
-      const data = await res.json()
 
-      if (data?.success) {
-        setFriendshipStatus('accepted')
-        setFriendshipDirection(null)
-        await fetchProfile()
-      } else {
-        Alert.alert('Error', data?.error || 'Failed to accept request')
-      }
-    } catch (err) {
-      console.error('Accept error:', err)
-      Alert.alert('Error', 'Failed to accept request')
-    } finally {
-      setFriendshipLoading(false)
-    }
-  }
-
-  // Determine follow button label, action, and disabled state
+  // Determine follow button label, action, and disabled state based on relationship
   const getFollowButton = () => {
-    if (friendshipStatus === 'pending' && friendshipDirection === 'outgoing') {
-      return { label: 'Pending', onPress: null, disabled: true }
+    if (relationship === 'following') {
+      return { label: 'Following', onPress: handleUnfollow, disabled: false, mode: 'outlined' }
     }
-    if (friendshipStatus === 'pending' && friendshipDirection === 'incoming') {
-      return { label: 'Accept Request', onPress: handleAccept, disabled: false }
-    }
-    if (friendshipStatus === 'accepted') {
-      return { label: 'Following', onPress: handleUnfollow, disabled: false }
-    }
-    return { label: 'Follow', onPress: handleFollow, disabled: false }
+    return { label: 'Follow', onPress: handleFollow, disabled: false, mode: 'contained' }
   }
 
   if (loading) {
@@ -283,6 +312,12 @@ export default function UserProfile() {
           {/* Name */}
           <Text style={styles.username}>{name}</Text>
 
+          {muted && currentUser?.uid !== userId && (
+            <View style={styles.mutedBadge}>
+              <Text style={styles.mutedBadgeText}>Muted</Text>
+            </View>
+          )}
+
           {/* Bio */}
           <Text style={styles.bioText}>{bio || 'No bio yet'}</Text>
         </View>
@@ -305,15 +340,29 @@ export default function UserProfile() {
           </TouchableOpacity>
         </View>
 
-        {/* Follow / Pending / Following button */}
-        {currentUser?.uid !== userId && (
+        {/* Follow / Following button */}
+        {currentUser?.uid !== userId && relationship !== 'self' && (
           <Button
-            mode={friendshipStatus === 'accepted' ? 'outlined' : 'contained'}
+            mode={followBtn.mode}
             onPress={followBtn.onPress}
             disabled={followBtn.disabled || friendshipLoading}
           >
             {friendshipLoading ? 'Loading...' : followBtn.label}
           </Button>
+        )}
+
+        {currentUser?.uid !== userId && (
+          <View style={styles.muteRow}>
+            <View style={styles.muteTextCol}>
+              <Text style={styles.muteTitle}>Mute this user</Text>
+              <Text style={styles.muteSubtitle}>Hide their posts from your feed and map.</Text>
+            </View>
+            <Switch
+              value={muted}
+              onValueChange={handleMuteToggle}
+              disabled={muteLoading}
+            />
+          </View>
         )}
 
         {/* Back button */}
@@ -324,15 +373,18 @@ export default function UserProfile() {
         {/* User's Echoes */}
         <View style={styles.messagesSection} onLayout={(e) => { echoesYRef.current = e.nativeEvent.layout.y }}>
           <Text style={styles.sectionTitle}>{name}'s Echoes</Text>
-          {messages.length > 0 ? (
-            messages.map((msg) => (
+          {posts.length > 0 ? (
+            posts.map((post) => (
               <ImageCard
-                key={msg.id}
-                image={require('../../assets/mockImages/Pyramid.jpeg')}
-                username={name}
-                likeCount={msg.upvote}
+                key={post.id}
+                postId={post.id}
+                image={{ uri: post.image_url }}
+                username={post.is_anonymous ? 'Anonymous' : name}
+                likeCount={post.like_count}
+                initialLiked={post.liked}
+                onLikeToggle={handleLikeToggle}
               >
-                {msg.message}
+                {post.overlay_text}
               </ImageCard>
             ))
           ) : (
@@ -437,6 +489,47 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginBottom: 8,
     textAlign: 'center',
+  },
+  muteRow: {
+    width: '100%',
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginTop: 12,
+    marginBottom: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  muteTextCol: {
+    flex: 1,
+    paddingRight: 10,
+  },
+  muteTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#222',
+  },
+  muteSubtitle: {
+    fontSize: 12,
+    color: '#666',
+    marginTop: 2,
+  },
+  mutedBadge: {
+    marginTop: 6,
+    marginBottom: 4,
+    backgroundColor: '#eef2ff',
+    borderColor: '#c7d2fe',
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
+  mutedBadgeText: {
+    color: '#3730a3',
+    fontSize: 12,
+    fontWeight: '700',
   },
   center: {
     textAlign: 'center',

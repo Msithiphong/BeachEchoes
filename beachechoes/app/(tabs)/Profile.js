@@ -8,6 +8,7 @@ import Background from '../../components/Background'
 import Header from '../../components/Header'
 import Button from '../../components/Button'
 import ImageCard from '../../components/ImageCard'
+import UserAutocomplete from '../../components/UserAutocomplete'
 import { AuthContext } from '../../context/AuthContext'
 import { uploadAvatar } from '../../helpers/avatarUpload'
 import { auth } from '../../config/firebase'
@@ -28,8 +29,9 @@ export default function Profile() {
 
   const [anonymousEchoes, setAnonymousEchoes] = useState(false)
 
+
   const [neonUserId, setNeonUserId] = useState(null)
-  const [messages, setMessages] = useState([])
+  const [posts, setPosts] = useState([])
 
   const [echoesCount, setEchoesCount] = useState(0)
   const [followingCount, setFollowingCount] = useState(0)
@@ -67,10 +69,12 @@ export default function Profile() {
 
         setAnonymousEchoes(!!pref)
 
-        // Store neon user_id and fetch messages
+
+
+        // Store neon user_id and fetch posts
         if (data.profile.id) {
           setNeonUserId(data.profile.id)
-          await fetchMessages(data.profile.id)
+          await fetchPosts(data.profile.id)
         }
       }
     } catch (error) {
@@ -80,16 +84,30 @@ export default function Profile() {
     }
   }
 
-  const fetchMessages = async (userId) => {
+  const fetchPosts = async (userId) => {
     try {
-      const res = await fetch(`${API_BASE}/messages/user/${userId}`)
+      // Include auth token to get liked status
+      const token = await auth.currentUser?.getIdToken()
+      const headers = token ? { Authorization: `Bearer ${token}` } : {}
+      
+      const res = await fetch(`${API_BASE}/posts/user/${userId}`, { headers })
       const data = await res.json()
       if (data?.success) {
-        setMessages(data.messages ?? [])
+        setPosts(data.posts ?? [])
       }
     } catch (error) {
-      console.log('Failed to fetch messages:', error)
+      console.log('Failed to fetch posts:', error)
     }
+  }
+
+  const handleLikeToggle = (postId, liked, likeCount) => {
+    setPosts(prevPosts => 
+      prevPosts.map(post => 
+        post.id === postId 
+          ? { ...post, liked, like_count: likeCount }
+          : post
+      )
+    )
   }
 
   const saveProfile = async () => {
@@ -135,6 +153,16 @@ export default function Profile() {
     if (saving) return
     setEditing(false)
     await fetchProfile()
+  }
+
+  // Navigate to the selected user's profile (or stay on Profile tab if it's the current user)
+  const handleSelectUser = (item) => {
+    if (item.id === user?.uid) {
+      // Already on own profile, do nothing or scroll to top
+      scrollRef.current?.scrollTo({ y: 0, animated: true })
+    } else {
+      router.push(`/profile/${item.id}`)
+    }
   }
 
   const pickAvatar = async () => {
@@ -263,18 +291,22 @@ export default function Profile() {
             <Text style={styles.bioText}>{bio || 'No bio yet'}</Text>
           )}
 
-          {/* Toggle only in edit mode */}
+          {/* Toggles only in edit mode */}
           {editing && (
-            <View style={styles.toggleRow}>
-              <View style={styles.toggleTextCol}>
-                <Text style={styles.toggleTitle}>Post Echoes anonymously</Text>
-                <Text style={styles.toggleSubtitle}>
-                  When enabled, your username won’t show on new Echoes.
-                </Text>
+            <>
+              <View style={styles.toggleRow}>
+                <View style={styles.toggleTextCol}>
+                  <Text style={styles.toggleTitle}>Post Echoes anonymously</Text>
+                  <Text style={styles.toggleSubtitle}>
+                    When enabled, your username won't show on new Echoes.
+                  </Text>
+                </View>
+
+                <Switch value={anonymousEchoes} onValueChange={setAnonymousEchoes} disabled={saving} />
               </View>
 
-              <Switch value={anonymousEchoes} onValueChange={setAnonymousEchoes} disabled={saving} />
-            </View>
+
+            </>
           )}
         </View>
 
@@ -313,18 +345,32 @@ export default function Profile() {
           </Button>
         )}
 
-        {/* User's Messages */}
+        {/* User Search */}
+        <View style={styles.searchSection}>
+          <Text style={styles.searchTitle}>Discover Users</Text>
+          <View style={styles.searchContainer}>
+            <UserAutocomplete
+              onSelectUser={handleSelectUser}
+              placeholder="Search users..."
+            />
+          </View>
+        </View>
+
+        {/* User's Posts */}
         <View style={styles.messagesSection} onLayout={(e) => { echoesYRef.current = e.nativeEvent.layout.y }}>
           <Text style={styles.sectionTitle}>My Echoes</Text>
-          {messages.length > 0 ? (
-            messages.map((msg) => (
+          {posts.length > 0 ? (
+            posts.map((post) => (
               <ImageCard
-                key={msg.id}
-                image={require('../../assets/mockImages/Pyramid.jpeg')}
-                username={name || user?.email}
-                likeCount={msg.upvote}
+                key={post.id}
+                postId={post.id}
+                image={{ uri: post.image_url }}
+                username={post.is_anonymous ? 'Anonymous' : (name || user?.email)}
+                likeCount={post.like_count}
+                initialLiked={post.liked}
+                onLikeToggle={handleLikeToggle}
               >
-                {msg.message}
+                {post.overlay_text}
               </ImageCard>
             ))
           ) : (
@@ -521,6 +567,24 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
+  searchSection: {
+    width: '100%',
+    marginTop: 20,
+    marginBottom: 10,
+  },
+
+  searchTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+
+  searchContainer: {
+    width: '100%',
+    zIndex: 1,
+  },
+
   messagesSection: {
     width: '100%',
     marginTop: 10,
@@ -553,7 +617,6 @@ const styles = StyleSheet.create({
     color: '#666',
   },
 })
-
 
 
 
