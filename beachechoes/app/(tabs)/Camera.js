@@ -27,8 +27,11 @@ import {
 } from 'react-native'
 import { useRouter } from 'expo-router'
 import { CameraView, useCameraPermissions } from 'expo-camera'
+<<<<<<< Updated upstream
 import * as Location from 'expo-location'
+=======
 import MaterialIcons from '@expo/vector-icons/MaterialIcons'
+>>>>>>> Stashed changes
 import BackButton from '../../components/BackButton'
 import { theme } from '../../core/theme'
 import { useDraftPost } from '../../context/DraftPostContext'
@@ -105,6 +108,8 @@ export default function CameraScreen() {
     )
   }
 
+<<<<<<< Updated upstream
+=======
   /**
    * Toggles between front and back camera
    */
@@ -116,10 +121,12 @@ export default function CameraScreen() {
    * Captures a photo using the camera
    * 
    * Prevents multiple simultaneous captures and handles photo quality settings.
-   * Requests location permission and captures current coordinates.
+   * Currently logs the photo URI for debugging. Future implementation will
+   * save or upload the photo to the backend.
    * 
    * @async
    */
+>>>>>>> Stashed changes
   const takePicture = async () => {
     if (isTakingPicture) return
 
@@ -184,16 +191,29 @@ export default function CameraScreen() {
       <View style={styles.cameraContainer}>
         <CameraView
           ref={cameraRef}
+<<<<<<< Updated upstream
           style={styles.camera}
+          facing="back"
+=======
           facing={facing}
+>>>>>>> Stashed changes
           onMountError={(event) => {
             const message = event?.nativeEvent?.message || 'Unknown camera error.'
             setCameraError(message)
             console.error('Camera mount error:', message)
           }}
         />
+<<<<<<< Updated upstream
 
         <BackButton goBack={() => router.back()} />
+
+        <TouchableOpacity
+          style={styles.captureButton}
+          onPress={takePicture}
+          disabled={isTakingPicture}
+        >
+          <View style={styles.buttonInner} />
+=======
         
         {/* Camera flip button - top right corner */}
         <TouchableOpacity
@@ -201,17 +221,9 @@ export default function CameraScreen() {
           onPress={flipCamera}
         >
           <MaterialIcons name="flip-camera-ios" size={32} color="#fff" />
+>>>>>>> Stashed changes
         </TouchableOpacity>
       </View>
-
-      {/* Capture button - styled as circular shutter button */}
-      <TouchableOpacity
-        style={styles.captureButton}
-        onPress={takePicture}
-        disabled={isTakingPicture}
-      >
-        <View style={styles.buttonInner} />
-      </TouchableOpacity>
     </View>
   )
 }
@@ -274,6 +286,9 @@ const styles = StyleSheet.create({
     borderRadius: 30,
     backgroundColor: '#fff',
   },
+<<<<<<< Updated upstream
+})
+=======
   flipButton: {
     position: 'absolute',
     top: 60,
@@ -286,3 +301,4 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 })
+>>>>>>> Stashed changes
