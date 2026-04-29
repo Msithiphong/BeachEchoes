@@ -18,4 +18,16 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Node modules
 node_modules/
+
+# Expo type definitions
+expo-env.d.ts
+.expo
+
+# Project documentation (local only)
+AGENTS.md
+CONTEXT.md
+MISTAKE_LOG.md
+PLAN.md

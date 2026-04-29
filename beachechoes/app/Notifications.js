@@ -12,130 +12,206 @@ import { auth } from '../config/firebase'
 import { AuthContext } from '../context/AuthContext'
 import { theme } from '../core/theme'
 
+const POLLING_INTERVAL_MS = 30000 // 30 seconds
+
 export default function Notifications() {
   const router = useRouter()
   const { user } = useContext(AuthContext)
 
-  const [requests, setRequests] = useState([])
+  const [notifications, setNotifications] = useState([])
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
 
-  const fetchPendingRequests = useCallback(async () => {
+  const fetchNotifications = useCallback(async (isRefresh = false) => {
     try {
+      if (!isRefresh) setLoading(true)
       const token = await auth.currentUser?.getIdToken()
-      const res = await fetch(`${API_BASE}/friendships/pending`, {
+      const res = await fetch(`${API_BASE}/notifications`, {
         headers: { Authorization: `Bearer ${token}` },
       })
       const data = await res.json()
       if (data?.success) {
-        setRequests(data.requests ?? [])
+        setNotifications(data.notifications ?? [])
       }
     } catch (err) {
-      console.error('Fetch pending requests error:', err)
+      console.error('Fetch notifications error:', err)
     } finally {
       setLoading(false)
+      if (isRefresh) setRefreshing(false)
     }
   }, [])
 
   useEffect(() => {
-    fetchPendingRequests()
-  }, [fetchPendingRequests])
+    fetchNotifications()
 
-  const handleAccept = async (friendUid) => {
+    // Poll for new notifications every 30 seconds
+    const interval = setInterval(() => {
+      fetchNotifications(true)
+    }, POLLING_INTERVAL_MS)
+
+    return () => clearInterval(interval)
+  }, [fetchNotifications])
+
+  const markAsRead = async (notificationIds) => {
     try {
       const token = await auth.currentUser?.getIdToken()
-      const res = await fetch(`${API_BASE}/friendships/accept`, {
-        method: 'PUT',
+      await fetch(`${API_BASE}/notifications/read`, {
+        method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ friendUid }),
+        body: JSON.stringify({ notificationIds }),
       })
-      const data = await res.json()
-      if (data?.success) {
-        setRequests((prev) => prev.filter((r) => r.firebase_uid !== friendUid))
-      }
+      // Update local state
+      setNotifications((prev) =>
+        prev.map((n) =>
+          notificationIds.includes(n.id) ? { ...n, read: true } : n
+        )
+      )
     } catch (err) {
-      console.error('Accept error:', err)
-      Alert.alert('Error', 'Could not accept request. Try again.')
+      console.error('Mark as read error:', err)
     }
   }
 
-  const handleDecline = async (friendUid) => {
-    try {
-      const token = await auth.currentUser?.getIdToken()
-      const res = await fetch(`${API_BASE}/friendships/unfollow`, {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ friendUid }),
-      })
-      const data = await res.json()
-      if (data?.success) {
-        setRequests((prev) => prev.filter((r) => r.firebase_uid !== friendUid))
+  const handleNotificationPress = async (notification) => {
+    // Mark as read
+    if (!notification.read) {
+      await markAsRead([notification.id])
+    }
+
+    // Navigate based on type
+    if (notification.type === 'friend_request') {
+      // Navigate to accept/decline screen or show inline actions
+      // For now, we'll handle friend requests inline
+    } else if (notification.type === 'post_liked') {
+      // Navigate to the post detail or user profile
+      router.push(`/PostDetail?ids=${notification.data.post_id}`)
+    } else if (notification.type === 'post_expired') {
+      // Just mark as read, no navigation
+    } else if (notification.type === 'new_follower') {
+      // Navigate to the follower's profile
+      if (notification.data.from_firebase_uid) {
+        router.push(`/profile/${notification.data.from_firebase_uid}`)
       }
-    } catch (err) {
-      console.error('Decline error:', err)
-      Alert.alert('Error', 'Could not decline request. Try again.')
     }
   }
 
-  const renderRequest = ({ item }) => (
-    <View style={styles.card}>
-      <TouchableOpacity
-        style={styles.userInfo}
-        onPress={() => router.push(`/profile/${item.firebase_uid}`)}
-      >
-        <Image
-          source={{
-            uri:
-              item.avatar_url ||
-              'https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png',
-          }}
-          style={styles.avatar}
-        />
-        <View style={styles.nameContainer}>
-          <Text style={styles.userName}>{item.name || 'Unknown User'}</Text>
-          <Text style={styles.subtitle}>Wants to follow you</Text>
-        </View>
-      </TouchableOpacity>
 
-      <View style={styles.actions}>
+
+  const renderNotification = ({ item }) => {
+    const isUnread = !item.read
+
+    // Only render 'new_follower', 'post_liked', and 'post_expired' notifications
+    if (item.type === 'new_follower') {
+      return (
         <TouchableOpacity
-          style={styles.acceptButton}
-          onPress={() => handleAccept(item.firebase_uid)}
+          style={[styles.card, isUnread && styles.unreadCard]}
+          onPress={() => handleNotificationPress(item)}
         >
-          <Text style={styles.acceptText}>Accept</Text>
+          <View style={styles.userInfo}>
+            <Image
+              source={{
+                uri:
+                  item.data.from_avatar_url ||
+                  'https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png',
+              }}
+              style={styles.avatar}
+            />
+            <View style={styles.nameContainer}>
+              <Text style={styles.userName}>{item.data.from_name}</Text>
+              <Text style={styles.subtitle}>Started following you</Text>
+              <Text style={styles.timeText}>
+                {new Date(item.created_at).toLocaleDateString()}
+              </Text>
+            </View>
+          </View>
+          {isUnread && <View style={styles.unreadDot} />}
         </TouchableOpacity>
+      )
+    }
+
+    if (item.type === 'post_liked') {
+      return (
         <TouchableOpacity
-          style={styles.declineButton}
-          onPress={() => handleDecline(item.firebase_uid)}
+          style={[styles.card, isUnread && styles.unreadCard]}
+          onPress={() => handleNotificationPress(item)}
         >
-          <Text style={styles.declineText}>Decline</Text>
+          <View style={styles.userInfo}>
+            <Image
+              source={{
+                uri:
+                  item.data.liker_avatar_url ||
+                  'https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png',
+              }}
+              style={styles.avatar}
+            />
+            <View style={styles.nameContainer}>
+              <Text style={styles.userName}>{item.data.liker_name}</Text>
+              <Text style={styles.subtitle}>Liked your post</Text>
+              <Text style={styles.timeText}>
+                {new Date(item.created_at).toLocaleDateString()}
+              </Text>
+            </View>
+          </View>
+          {isUnread && <View style={styles.unreadDot} />}
         </TouchableOpacity>
-      </View>
-    </View>
-  )
+      )
+    }
+
+    if (item.type === 'post_expired') {
+      return (
+        <TouchableOpacity
+          style={[styles.card, isUnread && styles.unreadCard]}
+          onPress={() => handleNotificationPress(item)}
+        >
+          <View style={styles.userInfo}>
+            <View style={[styles.avatar, styles.expiredIcon]}>
+              <Text style={styles.expiredEmoji}>⏱️</Text>
+            </View>
+            <View style={styles.nameContainer}>
+              <Text style={styles.userName}>Post Expired</Text>
+              <Text style={styles.subtitle}>{item.data.overlay_text}</Text>
+              <Text style={styles.timeText}>
+                {new Date(item.created_at).toLocaleDateString()}
+              </Text>
+            </View>
+          </View>
+          {isUnread && <View style={styles.unreadDot} />}
+        </TouchableOpacity>
+      )
+    }
+
+    return null
+  }
+
+  // Only count unread notifications of supported types
+  const unreadCount = notifications.filter((n) => ['new_follower', 'post_liked', 'post_expired'].includes(n.type) && !n.read).length
 
   return (
     <Background>
-      <Header>Notifications</Header>
+      <Header>
+        Notifications {unreadCount > 0 && `(${unreadCount})`}
+      </Header>
 
       {loading ? (
         <ActivityIndicator size="large" color={theme.colors.primary} />
-      ) : requests.length === 0 ? (
+      ) : notifications.filter((n) => ['new_follower', 'post_liked', 'post_expired'].includes(n.type)).length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>No pending requests</Text>
+          <Text style={styles.emptyText}>No notifications</Text>
         </View>
       ) : (
         <FlatList
-          data={requests}
-          keyExtractor={(item) => item.firebase_uid}
-          renderItem={renderRequest}
+          data={notifications.filter((n) => ['new_follower', 'post_liked', 'post_expired'].includes(n.type))}
+          keyExtractor={(item) => item.id.toString()}
+          renderItem={renderNotification}
           style={styles.list}
           contentContainerStyle={styles.listContent}
+          refreshing={refreshing}
+          onRefresh={() => {
+            setRefreshing(true)
+            fetchNotifications(true)
+          }}
         />
       )}
 
@@ -162,6 +238,21 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 8,
     elevation: 2,
+    position: 'relative',
+  },
+  unreadCard: {
+    backgroundColor: '#fffaed',
+    borderLeftWidth: 3,
+    borderLeftColor: theme.colors.primary,
+  },
+  unreadDot: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: theme.colors.primary,
   },
   userInfo: {
     flexDirection: 'row',
@@ -174,6 +265,14 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     marginRight: 12,
     backgroundColor: '#eee',
+  },
+  expiredIcon: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f0f0f0',
+  },
+  expiredEmoji: {
+    fontSize: 24,
   },
   nameContainer: {
     flex: 1,
@@ -188,34 +287,12 @@ const styles = StyleSheet.create({
     color: '#888',
     marginTop: 2,
   },
-  actions: {
-    flexDirection: 'row',
-    gap: 10,
+  timeText: {
+    fontSize: 11,
+    color: '#aaa',
+    marginTop: 4,
   },
-  acceptButton: {
-    flex: 1,
-    backgroundColor: theme.colors.primary,
-    paddingVertical: 10,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  acceptText: {
-    color: '#fff',
-    fontWeight: '600',
-    fontSize: 14,
-  },
-  declineButton: {
-    flex: 1,
-    backgroundColor: '#f0f0f0',
-    paddingVertical: 10,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  declineText: {
-    color: '#666',
-    fontWeight: '600',
-    fontSize: 14,
-  },
+  // ...existing code...
   emptyContainer: {
     flex: 1,
     justifyContent: 'center',

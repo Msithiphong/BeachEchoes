@@ -61,13 +61,11 @@ export default function Leaderboard() {
 
   // view controls which leaderboard you fetch:
   // - 'users' => backend returns user leaderboard rows
-  // - 'messages' => backend returns message leaderboard rows
+  // - 'posts' => backend returns post leaderboard rows
   const [view, setView] = useState('users')
 
-  // period controls time window for ranking:
-  // backend supports day|week|month|all (per your comment),
-  // but the UI only shows week/month for simplicity.
-  const [period, setPeriod] = useState('week')
+  // period controls time window for ranking (removed UI for week/month)
+  const period = 'week'
 
   // Loading + error states for fetch UI
   const [loading, setLoading] = useState(false)
@@ -79,17 +77,14 @@ export default function Leaderboard() {
 
   // rows holds the raw leaderboard rows from the backend:
   // - when view === 'users': { name, total_upvotes, avatar_url, rank? }
-  // - when view === 'messages': { message, upvotes, author: { name, avatar_url }, rank? }
+  // - when view === 'posts': { message, upvotes, author: { name, avatar_url }, rank? }
   const [rows, setRows] = useState([])
 
   // stats is a small “summary row” UI (messages/upvotes/comments)
   // Here it’s computed locally from rows (no separate /api/stats call).
   const [stats, setStats] = useState({ echoes: 0, appraises: 0, comments: 0 })
 
-  // UI only displays Week/Month.
-  // If period is anything else (like 'day' or 'all'), this falls back to showing 'week' selected.
-  // (You can expand the UI later if you want more periods.)
-  const togglePeriodValue = period === 'month' ? 'month' : 'week'
+  // UI only displays one period (week) now.
 
   // ------------------------------------
   // Build the leaderboard URL (memoized)
@@ -164,7 +159,7 @@ export default function Leaderboard() {
           comments: 0,
         })
       } else {
-        // upvotes exists on message rows
+        // upvotes exists on post rows
         const totalUpvotes = data.reduce((sum, r) => sum + Number(r.upvotes ?? 0), 0)
         setStats({
           echoes: data.length,
@@ -235,6 +230,7 @@ export default function Leaderboard() {
           {
             width: screenW,
             transform: [{ translateX: -leftOffset }],
+            marginTop: 40, // Shift all content down by 10
           },
         ]}
       >
@@ -253,45 +249,27 @@ export default function Leaderboard() {
               TOP HEADER BAR
              ---------------------------- */}
           <Surface style={styles.headerBar} elevation={0}>
-            {/* Refresh button re-fetches leaderboard */}
-            <Button mode="outlined" onPress={loadData} disabled={loading} style={styles.refreshBtn}>
-              Refresh
-            </Button>
-
-            {/* Title in center */}
-            <Text style={styles.headerTitle}>Leaderboard</Text>
-
-            {/* Spacer so title stays centered (same width as refresh button) */}
-            <View style={styles.headerSpacer} />
+            {/* Title centered */}
+            <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+              <Text style={[styles.headerTitle, { textAlign: 'center', width: '100%' }]}>Leaderboard</Text>
+            </View>
           </Surface>
 
           {/* ----------------------------
               FILTERS (stay near top)
              ---------------------------- */}
           <Surface style={styles.filterWrap} elevation={0}>
-            {/* Period toggle (Week/Month only) */}
-            <SegmentedButtons
-              value={togglePeriodValue}
-              // When user taps week/month, update `period` state => triggers useEffect => reload
-              onValueChange={(v) => setPeriod(v)}
-              buttons={[
-                { value: 'week', label: 'Week' },
-                { value: 'month', label: 'Month' },
-              ]}
-              style={styles.segmented}
-            />
+            {/* Removed Week/Month period toggle buttons */}
+            {/* Simple spacing between the two segmented rows (removed) */}
 
-            {/* Simple spacing between the two segmented rows */}
-            <View style={{ height: 10 }} />
-
-            {/* View toggle (Top Users / Top Messages) */}
+            {/* View toggle (Top Users / Top Posts) */}
             <SegmentedButtons
               value={view}
               // Update `view` state => triggers reload
               onValueChange={(v) => setView(v)}
               buttons={[
                 { value: 'users', label: 'Top Users' },
-                { value: 'messages', label: 'Top Messages' },
+                { value: 'posts', label: 'Top Posts' },
               ]}
               style={styles.segmented}
             />
@@ -318,33 +296,28 @@ export default function Leaderboard() {
              ---------------------------- */}
           <Surface style={styles.topCard} elevation={0}>
             {/* Label changes depending on selected view */}
-            <Text style={styles.topSectionLabel}>
-              {view === 'users' ? 'Top User' : 'Top Message'}
-            </Text>
+            
 
-            {/* Avatar + medal row */}
-            <View style={styles.topCardRow}>
-              <View style={styles.topAvatarAndMedal}>
+            {/* Avatar row (no medal for Top User or Top Post) */}
+            <View style={[styles.topCardRow, view === 'users' && { justifyContent: 'center' }]}> 
+              <View style={[styles.topAvatarAndMedal, view === 'users' && { justifyContent: 'center', width: '100%' }]}> 
                 {/* Avatar rendering depends on view + available URL */}
-                {renderAvatar(topItem, view)}
-                <View style={{ width: 10 }} />
-                {/* Rank #1 medal */}
-                {renderMedal(1, 38)}
+                <View style={{ width: '100%', alignItems: 'center', justifyContent: 'center' }}>
+                  {renderAvatar(topItem, view)}
+                </View>
+                {/* Medal removed for both Top User and Top Post */}
               </View>
             </View>
 
             {/* Main text area for the top item */}
-            <View style={styles.topTextBlock}>
-              {/* Display name:
-                  - users: item.name
-                  - messages: item.author.name
-              */}
-              <Text style={styles.topName} numberOfLines={1}>
+            <View style={[styles.topTextBlock, view === 'users' && { alignItems: 'center', width: '100%' }]}> 
+              {/* Display name: users: item.name, posts: item.author.name */}
+              <Text style={[styles.topName, view === 'users' && { textAlign: 'center', width: '100%' }]} numberOfLines={1}>
                 {view === 'users' ? topItem?.name ?? '—' : topItem?.author?.name ?? '—'}
               </Text>
 
               {/* Votes in a black “pill” bubble for strong contrast */}
-              <View style={styles.topVotesBubble}>
+              <View style={[styles.topVotesBubble, view === 'users' && { alignSelf: 'center' }]}> 
                 <Text style={styles.topVotesBubbleText}>
                   {view === 'users'
                     ? `Votes: ${String(topItem?.total_upvotes ?? 0)}`
@@ -352,8 +325,8 @@ export default function Leaderboard() {
                 </Text>
               </View>
 
-              {/* Only show message preview if we’re in messages view */}
-              {view === 'messages' && (
+              {/* Only show message preview if we're in posts view */}
+              {view === 'posts' && (
                 <Text style={styles.topPreview} numberOfLines={3}>
                   {topItem?.message ?? '—'}
                 </Text>
@@ -364,8 +337,8 @@ export default function Leaderboard() {
           {/* ----------------------------
               LIST SECTION (starts at #2)
              ---------------------------- */}
-          <Text style={styles.sectionTitle}>
-            {view === 'users' ? 'Leaderboard Users' : 'Leaderboard Messages'}
+          <Text style={[styles.sectionTitle, { textAlign: 'center', alignSelf: 'center', width: '100%' }]}> 
+            {view === 'users' ? 'Leaderboard Users' : 'Leaderboard Posts'}
           </Text>
 
           <View style={styles.listWrap}>
@@ -380,12 +353,12 @@ export default function Leaderboard() {
 
               // Card title:
               // - users: r.name
-              // - messages: r.message
+              // - posts: r.message
               const title = view === 'users' ? r.name ?? 'Unknown User' : r.message ?? 'Unknown Message'
 
               // Card subtitle:
               // - users: show votes total_upvotes
-              // - messages: show author + votes
+              // - posts: show author + votes
               const subtitle =
                 view === 'users'
                   ? `Votes: ${String(r.total_upvotes ?? 0)}`
@@ -409,7 +382,7 @@ export default function Leaderboard() {
                     <View style={styles.itemTextCol}>
                       {/* Title lines:
                           - users: 1 line (names should be short)
-                          - messages: allow 2 lines
+                          - posts: allow 2 lines
                       */}
                       <Text style={styles.itemTitle} numberOfLines={view === 'users' ? 1 : 2}>
                         {title}
@@ -419,8 +392,8 @@ export default function Leaderboard() {
                         {subtitle}
                       </Text>
 
-                      {/* Extra preview line only for messages */}
-                      {view === 'messages' && (
+                      {/* Extra preview line only for posts */}
+                      {view === 'posts' && (
                         <Text style={styles.itemPreview} numberOfLines={3}>
                           {String(r.message ?? '')}
                         </Text>
@@ -432,7 +405,9 @@ export default function Leaderboard() {
             })}
 
             {/* Empty state (only show when not loading and no rows) */}
-            {!listRows.length && !loading && <Text style={styles.empty}>No results yet</Text>}
+            {!listRows.length && !loading && (
+              <Text style={[styles.empty, { textAlign: 'center', alignSelf: 'center', width: '100%' }]}>No results yet</Text>
+            )}
           </View>
         </ScrollView>
       </View>
@@ -461,7 +436,7 @@ function Stat({ label, value }) {
  *
  * Note: view determines where avatar lives:
  * - users: item.avatar_url
- * - messages: item.author.avatar_url
+ * - posts: item.author.avatar_url
  */
 function renderAvatar(item, view) {
   // If topItem is missing (no rows), show a default placeholder
@@ -479,7 +454,7 @@ function renderAvatar(item, view) {
 
   // If no image, use initial:
   // - users: initial from item.name
-  // - messages: initial from item.author.name
+  // - posts: initial from item.author.name
   const label = view === 'users' ? topInitial(item.name) : topInitial(item.author?.name)
 
   return <Avatar.Text size={92} label={label} style={styles.avatarPlaceholder} />
@@ -564,7 +539,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     color: '#000',
-    fontSize: 18,
+    fontSize: 30,
     fontWeight: 'bold',
   },
   headerSpacer: {
@@ -674,6 +649,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: 'bold',
     marginBottom: 8,
+    
   },
   listWrap: {
     // gap adds spacing between cards (RN supports gap in newer versions)
