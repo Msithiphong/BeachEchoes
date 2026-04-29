@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   TextInput,
@@ -36,9 +36,14 @@ export default function EditPost() {
   const [selectedCategory, setSelectedCategory] = useState(category || DEFAULT_POST_CATEGORY);
   const [categoryOpen, setCategoryOpen] = useState(false);
 
+  useEffect(() => {
+    if (!localImageUri) {
+      // Guard: if someone lands here without a draft, send them back.
+      router.replace('/(tabs)/Camera');
+    }
+  }, [localImageUri, router]);
+
   if (!localImageUri) {
-    // Guard: if someone lands here without a draft, send them back.
-    router.replace('/(tabs)/Camera');
     return null;
   }
 

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -20,8 +20,13 @@ export default function MapPlacement() {
 
   const [pin, setPin] = useState(null); // { x, y } normalized
 
+  useEffect(() => {
+    if (!localImageUri) {
+      router.replace('/(tabs)/Camera');
+    }
+  }, [localImageUri, router]);
+
   if (!localImageUri) {
-    router.replace('/(tabs)/Camera');
     return null;
   }
 
