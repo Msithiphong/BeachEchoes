@@ -910,24 +910,6 @@ app.put('/api/profile/:userId', requireFirebaseAuth, async (req, res) => {
 
 // -------------------- FRIENDSHIPS --------------------
 
-// Helper: resolve firebase_uid → neon user_id
-async function resolveUserId(firebaseUid) {
-  const rows = await sql`SELECT user_id FROM users WHERE firebase_uid = ${firebaseUid}`
-  return rows.length ? rows[0].user_id : null
-}
-
-async function resolveViewerUserId(req) {
-  const authHeader = req.headers.authorization
-  if (!authHeader || !authHeader.startsWith('Bearer ')) return null
-  try {
-    const token = authHeader.slice(7)
-    const decodedToken = await admin.auth().verifyIdToken(token)
-    return await resolveUserId(decodedToken.uid)
-  } catch {
-    return null
-  }
-}
-
 // -------------------- NOTIFICATIONS --------------------
 
 // Notification types (extensible for future use)
@@ -973,7 +955,7 @@ async function createNotification(userId, type, data, fromUserId = null) {
       error: error.message,
     })
   }
-})
+}
 
 // ------------------ END NOTIFICATIONS ------------------
 
