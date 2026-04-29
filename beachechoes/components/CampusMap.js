@@ -3,10 +3,12 @@ import {
   View,
   Image,
   TouchableWithoutFeedback,
+  TouchableOpacity,
   StyleSheet,
   ScrollView,
   Pressable,
   Text,
+  Alert,
 } from 'react-native'
 import { GestureHandlerRootView, GestureDetector, Gesture } from 'react-native-gesture-handler'
 import Animated, {
@@ -18,12 +20,20 @@ import Animated, {
 } from 'react-native-reanimated'
 
 import { MAP_ASPECT_RATIO } from '../config/campusMap'
+import DebugCampusPolygon from './DebugCampusPolygon'
 
 const MAP_IMAGE = require('../assets/images/CSULB Map.png')
+
+// DEBUG: Set EXPO_PUBLIC_DEBUG_SHOW_CAMPUS_POLYGON="true" in .env to show polygon overlay
+const SHOW_DEBUG_POLYGON = process.env.EXPO_PUBLIC_DEBUG_SHOW_CAMPUS_POLYGON === 'true'
+
+// DEBUG: Set EXPO_PUBLIC_DEBUG_SHOW_COORDINATES="true" in .env to show tap coordinates
+const SHOW_DEBUG_COORDINATES = process.env.EXPO_PUBLIC_DEBUG_SHOW_COORDINATES === 'true'
 
 export default function CampusMap({ onTap, children, style }) {
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 })
   const [zoom, setZoom] = useState(1) // For children props
+  const [lastTapCoords, setLastTapCoords] = useState(null) // For debug coordinate display
   
   // Use shared values for pinch-to-zoom
   const scale = useSharedValue(1)
@@ -86,14 +96,24 @@ export default function CampusMap({ onTap, children, style }) {
   const scaledHeight = dimensions.height * zoom
 
   function handlePress(e) {
-    if (!onTap || dimensions.width === 0) return
+    if (dimensions.width === 0) return
 
     const { locationX, locationY } = e.nativeEvent
 
-    onTap({
+    const normalizedCoords = {
       x: Math.min(1, Math.max(0, locationX / scaledWidth)),
       y: Math.min(1, Math.max(0, locationY / scaledHeight)),
-    })
+    }
+
+    // Store coordinates for debug display
+    if (SHOW_DEBUG_COORDINATES) {
+      setLastTapCoords(normalizedCoords)
+    }
+
+    // Call parent callback if provided
+    if (onTap) {
+      onTap(normalizedCoords)
+    }
   }
 
   return (
@@ -143,6 +163,13 @@ export default function CampusMap({ onTap, children, style }) {
                               : null
                           )
                         : null}
+
+                      {SHOW_DEBUG_POLYGON && (
+                        <DebugCampusPolygon
+                          mapWidth={scaledWidth}
+                          mapHeight={scaledHeight}
+                        />
+                      )}
                     </Animated.View>
                   </TouchableWithoutFeedback>
                 </Animated.View>
@@ -161,6 +188,29 @@ export default function CampusMap({ onTap, children, style }) {
               <Text style={styles.zoomButtonText}>−</Text>
             </Pressable>
           </View>
+
+          {SHOW_DEBUG_COORDINATES && lastTapCoords && (
+            <View style={styles.coordinateOverlay}>
+              <Text style={styles.coordinateLabel}>Last Tap:</Text>
+              <Text style={styles.coordinateValue}>
+                x: {lastTapCoords.x.toFixed(5)}
+              </Text>
+              <Text style={styles.coordinateValue}>
+                y: {lastTapCoords.y.toFixed(5)}
+              </Text>
+              <TouchableOpacity
+                style={styles.copyButton}
+                onPress={() => {
+                  const coordString = `{ x: ${lastTapCoords.x.toFixed(5)}, y: ${lastTapCoords.y.toFixed(5)} },`
+                  console.log('Coordinate for VALID_CAMPUS_POLYGON:', coordString)
+                  Alert?.alert?.('Copied to Console', coordString) ||
+                    alert?.(coordString)
+                }}
+              >
+                <Text style={styles.copyButtonText}>Log</Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </GestureHandlerRootView>
       ) : null}
     </View>
@@ -222,5 +272,53 @@ const styles = StyleSheet.create({
   divider: {
     height: 1,
     backgroundColor: 'rgba(255,255,255,0.25)',
+  },
+
+  coordinateOverlay: {
+    position: 'absolute',
+    top: 14,
+    right: 14,
+    backgroundColor: 'rgba(0, 0, 0, 0.85)',
+    borderRadius: 12,
+    padding: 12,
+    minWidth: 160,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+    zIndex: 50,
+  },
+
+  coordinateLabel: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '700',
+    marginBottom: 6,
+    textTransform: 'uppercase',
+    opacity: 0.7,
+  },
+
+  coordinateValue: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '600',
+    fontFamily: 'monospace',
+    marginBottom: 2,
+  },
+
+  copyButton: {
+    marginTop: 8,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    alignItems: 'center',
+  },
+
+  copyButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
   },
 })

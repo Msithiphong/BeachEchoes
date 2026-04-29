@@ -13,12 +13,34 @@ export default function ClusteredPin({
   mapHeight,
   onPress,
 }) {
+  // Validate centroid coordinates
   if (!centroid || !mapWidth || !mapHeight) {
     return null
   }
 
-  const left = centroid.x * mapWidth - PIN_RADIUS
-  const top = centroid.y * mapHeight - PIN_RADIUS
+  // Parse coordinates - handle both numbers and numeric strings from database
+  const x = typeof centroid.x === 'string' ? parseFloat(centroid.x) : centroid.x
+  const y = typeof centroid.y === 'string' ? parseFloat(centroid.y) : centroid.y
+  
+  // Defensive check: ensure coordinates are valid numbers in [0, 1] range
+  if (
+    typeof x !== 'number' ||
+    typeof y !== 'number' ||
+    isNaN(x) ||
+    isNaN(y) ||
+    x < 0 ||
+    x > 1 ||
+    y < 0 ||
+    y > 1
+  ) {
+    if (__DEV__) {
+      console.warn('ClusteredPin: Invalid centroid coordinates:', { x, y, ids })
+    }
+    return null
+  }
+
+  const left = x * mapWidth - PIN_RADIUS
+  const top = y * mapHeight - PIN_RADIUS
 
   return (
     <TouchableOpacity

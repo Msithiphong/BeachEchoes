@@ -1074,6 +1074,8 @@ app.get('/api/posts/map', async (req, res) => {
           FROM posts p
           WHERE p.is_deleted = FALSE
             AND p.created_at >= NOW() - ${POST_TTL_INTERVAL}::interval
+            AND p.map_x IS NOT NULL
+            AND p.map_y IS NOT NULL
             AND p.user_id IN (
               SELECT muted_user_id
               FROM user_mutes
@@ -1088,6 +1090,8 @@ app.get('/api/posts/map', async (req, res) => {
         FROM posts p
         WHERE p.is_deleted = FALSE
           AND p.created_at >= NOW() - ${POST_TTL_INTERVAL}::interval
+          AND p.map_x IS NOT NULL
+          AND p.map_y IS NOT NULL
           AND (${!shouldFilterCategory} OR p.category = ${rawCategory})
           AND (
             ${viewerUserId}::int IS NULL
@@ -1118,6 +1122,8 @@ app.get('/api/posts/muted', requireFirebaseAuth, async (req, res) => {
       FROM posts p
       WHERE p.is_deleted = FALSE
         AND p.created_at >= NOW() - ${POST_TTL_INTERVAL}::interval
+        AND p.map_x IS NOT NULL
+        AND p.map_y IS NOT NULL
         AND p.user_id IN (
           SELECT muted_user_id
           FROM user_mutes
