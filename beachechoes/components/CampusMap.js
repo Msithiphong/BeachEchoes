@@ -8,6 +8,14 @@ import {
   Pressable,
   Text,
 } from 'react-native'
+import { GestureHandlerRootView, GestureDetector, Gesture } from 'react-native-gesture-handler'
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  useAnimatedReaction,
+  runOnJS,
+} from 'react-native-reanimated'
 
 import { MAP_ASPECT_RATIO } from '../config/campusMap'
 
@@ -15,7 +23,19 @@ const MAP_IMAGE = require('../assets/images/CSULB Map.png')
 
 export default function CampusMap({ onTap, children, style }) {
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 })
-  const [zoom, setZoom] = useState(1)
+  const [zoom, setZoom] = useState(1) // For children props
+  
+  // Use shared values for pinch-to-zoom
+  const scale = useSharedValue(1)
+  const baseScale = useSharedValue(1)
+
+  // Sync scale to zoom state for children
+  useAnimatedReaction(
+    () => scale.value,
+    (currentScale) => {
+      runOnJS(setZoom)(currentScale)
+    }
+  )
 
   function handleLayout(e) {
     const { width } = e.nativeEvent.layout
@@ -27,12 +47,40 @@ export default function CampusMap({ onTap, children, style }) {
   }
 
   const zoomIn = () => {
-    setZoom(prev => Math.min(prev + 0.25, 3))
+    const newScale = Math.min(scale.value + 0.25, 3)
+    scale.value = withTiming(newScale, { duration: 200 })
+    baseScale.value = newScale
   }
 
   const zoomOut = () => {
-    setZoom(prev => Math.max(prev - 0.25, 1))
+    const newScale = Math.max(scale.value - 0.25, 1)
+    scale.value = withTiming(newScale, { duration: 200 })
+    baseScale.value = newScale
   }
+
+  // Pinch gesture using modern Gesture API
+  const pinchGesture = Gesture.Pinch()
+    .onStart(() => {
+      baseScale.value = scale.value
+    })
+    .onUpdate((event) => {
+      const newScale = Math.min(Math.max(baseScale.value * event.scale, 1), 3)
+      scale.value = newScale
+    })
+    .onEnd(() => {
+      baseScale.value = scale.value
+    })
+
+  // Animated style for the map content
+  const animatedStyle = useAnimatedStyle(() => {
+    const scaledWidth = dimensions.width * scale.value
+    const scaledHeight = dimensions.height * scale.value
+    
+    return {
+      width: scaledWidth,
+      height: scaledHeight,
+    }
+  })
 
   const scaledWidth = dimensions.width * zoom
   const scaledHeight = dimensions.height * zoom
@@ -60,7 +108,7 @@ export default function CampusMap({ onTap, children, style }) {
       onLayout={handleLayout}
     >
       {dimensions.width > 0 ? (
-        <>
+        <GestureHandlerRootView style={{ flex: 1 }}>
           <ScrollView
             horizontal
             nestedScrollEnabled
@@ -70,37 +118,35 @@ export default function CampusMap({ onTap, children, style }) {
               nestedScrollEnabled
               showsVerticalScrollIndicator={false}
             >
-              <TouchableWithoutFeedback onPress={handlePress}>
-                <View
-                  style={[
-                    styles.mapContent,
-                    {
-                      width: scaledWidth,
-                      height: scaledHeight,
-                    },
-                  ]}
-                >
-                  <Image
-                    source={MAP_IMAGE}
-                    style={{
-                      width: scaledWidth,
-                      height: scaledHeight,
-                    }}
-                    resizeMode="stretch"
-                  />
+              <GestureDetector gesture={pinchGesture}>
+                <Animated.View>
+                  <TouchableWithoutFeedback onPress={handlePress}>
+                    <Animated.View
+                      style={[
+                        styles.mapContent,
+                        animatedStyle,
+                      ]}
+                    >
+                      <Animated.Image
+                        source={MAP_IMAGE}
+                        style={animatedStyle}
+                        resizeMode="stretch"
+                      />
 
-                  {children
-                    ? React.Children.map(children, child =>
-                        child
-                          ? React.cloneElement(child, {
-                              mapWidth: scaledWidth,
-                              mapHeight: scaledHeight,
-                            })
-                          : null
-                      )
-                    : null}
-                </View>
-              </TouchableWithoutFeedback>
+                      {children
+                        ? React.Children.map(children, child =>
+                            child
+                              ? React.cloneElement(child, {
+                                  mapWidth: scaledWidth,
+                                  mapHeight: scaledHeight,
+                                })
+                              : null
+                          )
+                        : null}
+                    </Animated.View>
+                  </TouchableWithoutFeedback>
+                </Animated.View>
+              </GestureDetector>
             </ScrollView>
           </ScrollView>
 
@@ -115,7 +161,7 @@ export default function CampusMap({ onTap, children, style }) {
               <Text style={styles.zoomButtonText}>−</Text>
             </Pressable>
           </View>
-        </>
+        </GestureHandlerRootView>
       ) : null}
     </View>
   )
