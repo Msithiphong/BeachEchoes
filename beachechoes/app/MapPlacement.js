@@ -9,16 +9,35 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
+import { MaterialIcons } from '@expo/vector-icons';
+import * as Location from 'expo-location';
 import { useDraftPost } from '../context/DraftPostContext';
 import CampusMap from '../components/CampusMap';
 import ClusteredPin from '../components/ClusteredPin';
-import { pointInPolygon } from '../helpers/mapUtils';
+import YouAreHerePin from '../components/YouAreHerePin';
+import { pointInPolygon, latLngToNormalized, snapToPolygonBoundary } from '../helpers/mapUtils';
 
 export default function MapPlacement() {
   const router = useRouter();
-  const { localImageUri, setMapX, setMapY, clearDraft } = useDraftPost();
+  const { 
+    localImageUri, 
+    setMapX, 
+    setMapY, 
+    clearDraft,
+    userLat,
+    setUserLat,
+    userLng,
+    setUserLng,
+    userMapX,
+    setUserMapX,
+    userMapY,
+    setUserMapY,
+    locationPermissionGranted,
+    setLocationPermissionGranted,
+  } = useDraftPost();
 
   const [pin, setPin] = useState(null); // { x, y } normalized
+  const [isRefreshingLocation, setIsRefreshingLocation] = useState(false);
 
   useEffect(() => {
     if (!localImageUri) {
@@ -26,8 +45,102 @@ export default function MapPlacement() {
     }
   }, [localImageUri, router]);
 
+  // Refresh location when MapPlacement is entered
+  useEffect(() => {
+    async function refreshLocation() {
+      if (!locationPermissionGranted) return;
+      
+      try {
+        setIsRefreshingLocation(true);
+        const location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+        
+        const { latitude, longitude } = location.coords;
+        
+        // Store raw lat/lng
+        setUserLat(latitude);
+        setUserLng(longitude);
+        
+        // Convert to normalized map coordinates
+        const normalized = latLngToNormalized(latitude, longitude);
+        
+        // Check if within campus polygon, if not snap to boundary
+        let mapCoords = normalized;
+        if (!pointInPolygon(normalized)) {
+          mapCoords = snapToPolygonBoundary(normalized);
+        }
+        
+        setUserMapX(mapCoords.x);
+        setUserMapY(mapCoords.y);
+      } catch (error) {
+        console.error('Location refresh error:', error);
+        Alert.alert('Location Error', 'Failed to refresh your location. You can still select a spot manually.');
+      } finally {
+        setIsRefreshingLocation(false);
+      }
+    }
+
+    refreshLocation();
+  }, []);
+
   if (!localImageUri) {
     return null;
+  }
+
+  const hasYouAreHere = locationPermissionGranted && userMapX != null && userMapY != null;
+  const youAreHereCoords = hasYouAreHere ? { x: userMapX, y: userMapY } : null;
+
+  // Determine which pin to show: only one pin at a time
+  // If user has selected a spot, show that; otherwise show "You Are Here" if available
+  const showYouAreHere = hasYouAreHere && !pin;
+  const showSelectedPin = pin != null;
+
+  async function handleRequestLocation() {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      
+      if (status === 'granted') {
+        setLocationPermissionGranted(true);
+        
+        // Fetch location immediately
+        setIsRefreshingLocation(true);
+        const location = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+        
+        const { latitude, longitude } = location.coords;
+        
+        setUserLat(latitude);
+        setUserLng(longitude);
+        
+        const normalized = latLngToNormalized(latitude, longitude);
+        let mapCoords = normalized;
+        if (!pointInPolygon(normalized)) {
+          mapCoords = snapToPolygonBoundary(normalized);
+        }
+        
+        setUserMapX(mapCoords.x);
+        setUserMapY(mapCoords.y);
+        setIsRefreshingLocation(false);
+      } else {
+        setLocationPermissionGranted(false);
+        Alert.alert('Permission Denied', 'Location permission is required to use the "You Are Here" feature.');
+      }
+    } catch (error) {
+      console.error('Location request error:', error);
+      setIsRefreshingLocation(false);
+    }
+  }
+
+  function handleNearMePress() {
+    if (!hasYouAreHere) return;
+    
+    // Center and zoom to "You Are Here" pin at 2x zoom
+    // Note: Implement zoom/center behavior in CampusMap if needed
+    // For now, we'll just show an alert as a placeholder
+    Alert.alert('Centering...', 'This feature will center the map on your location.');
+    // TODO: Implement actual zoom/center logic
   }
 
   function handleTap({ x, y }) {
@@ -36,6 +149,13 @@ export default function MapPlacement() {
       return;
     }
     setPin({ x, y });
+  }
+
+  function handleYouAreHereTap() {
+    // Re-select "You Are Here" as the post location
+    if (hasYouAreHere) {
+      setPin(null); // Clear manual selection to show "You Are Here"
+    }
   }
 
   function handleBack() {
@@ -48,12 +168,15 @@ export default function MapPlacement() {
   }
 
   function handlePublish() {
-    if (!pin) {
+    // Use selected pin if available, otherwise use "You Are Here"
+    const finalCoords = pin || youAreHereCoords;
+    
+    if (!finalCoords) {
       Alert.alert('No location', 'Tap a spot on the campus map before publishing.');
       return;
     }
-    setMapX(pin.x);
-    setMapY(pin.y);
+    setMapX(finalCoords.x);
+    setMapY(finalCoords.y);
     // MapPlacement triggers publish; navigate to postUpload handler via PostPublish
     router.push('/PostPublish');
   }
@@ -68,9 +191,9 @@ export default function MapPlacement() {
       <View style={styles.headerCard}>
         <Text style={styles.heading}>Pin Your Echo</Text>
         <Text style={styles.sub}>Tap one spot on campus to publish your post.</Text>
-        <View style={[styles.statusChip, pin ? styles.statusChipReady : styles.statusChipWaiting]}>
-          <Text style={[styles.statusText, pin ? styles.statusTextReady : styles.statusTextWaiting]}>
-            {pin ? 'Location selected' : 'Select a location'}
+        <View style={[styles.statusChip, (pin || hasYouAreHere) ? styles.statusChipReady : styles.statusChipWaiting]}>
+          <Text style={[styles.statusText, (pin || hasYouAreHere) ? styles.statusTextReady : styles.statusTextWaiting]}>
+            {pin ? 'Location selected' : hasYouAreHere ? 'Using your location' : 'Select a location'}
           </Text>
         </View>
       </View>
@@ -78,7 +201,13 @@ export default function MapPlacement() {
       <ScrollView contentContainerStyle={styles.mapWrapper} showsVerticalScrollIndicator={false}>
         <View style={styles.mapCard}>
           <CampusMap onTap={handleTap}>
-            {pin && (
+            {showYouAreHere && (
+              <YouAreHerePin
+                centroid={youAreHereCoords}
+                onPress={handleYouAreHereTap}
+              />
+            )}
+            {showSelectedPin && (
               <ClusteredPin
                 centroid={pin}
                 ids={[0]}
@@ -86,6 +215,19 @@ export default function MapPlacement() {
               />
             )}
           </CampusMap>
+          
+          {/* NearMe / NearMeDisabled Icon */}
+          <TouchableOpacity
+            style={styles.nearMeButton}
+            onPress={locationPermissionGranted ? handleNearMePress : handleRequestLocation}
+            disabled={isRefreshingLocation}
+          >
+            <MaterialIcons
+              name={locationPermissionGranted ? 'near-me' : 'near-me-disabled'}
+              size={24}
+              color={locationPermissionGranted ? '#2563eb' : '#94a3b8'}
+            />
+          </TouchableOpacity>
         </View>
       </ScrollView>
 
@@ -97,9 +239,9 @@ export default function MapPlacement() {
           <Text style={styles.ghostText}>Cancel</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.primaryBtn, !pin && styles.disabledBtn]}
+          style={[styles.primaryBtn, !(pin || hasYouAreHere) && styles.disabledBtn]}
           onPress={handlePublish}
-          disabled={!pin}
+          disabled={!(pin || hasYouAreHere)}
         >
           <LinearGradient
             colors={['#0f172a', '#1f2937']}
@@ -162,6 +304,23 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.14,
     shadowRadius: 8,
     elevation: 2,
+    position: 'relative',
+  },
+  nearMeButton: {
+    position: 'absolute',
+    bottom: 16,
+    right: 16,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#111827',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
   },
   actions: {
     flexDirection: 'row',

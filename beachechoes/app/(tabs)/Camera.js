@@ -15,13 +15,15 @@
  * @component
  */
 
-import React, { useRef, useState } from 'react'
+import React, { useRef, useState, useEffect } from 'react'
 import { View, TouchableOpacity, StyleSheet, Text, ActivityIndicator, Platform } from 'react-native'
 import { useRouter } from 'expo-router'
 import { CameraView, useCameraPermissions } from 'expo-camera'
+import * as Location from 'expo-location'
 import BackButton from '../../components/BackButton'
 import { theme } from '../../core/theme'
 import { useDraftPost } from '../../context/DraftPostContext'
+import { latLngToNormalized, pointInPolygon, snapToPolygonBoundary } from '../../helpers/mapUtils'
 
 function parseExifDate(value) {
   if (!value || typeof value !== 'string') return null
@@ -44,7 +46,60 @@ export default function CameraScreen() {
   const [isTakingPicture, setIsTakingPicture] = useState(false)
   const [cameraError, setCameraError] = useState(null)
 
-  const { setLocalImageUri, setCapturedAt, clearDraft } = useDraftPost()
+  const { 
+    setLocalImageUri, 
+    setCapturedAt, 
+    clearDraft, 
+    setUserLat, 
+    setUserLng, 
+    setUserMapX, 
+    setUserMapY,
+    locationPermissionGranted,
+    setLocationPermissionGranted,
+  } = useDraftPost()
+
+  // Request location permission and fetch user's location on mount
+  useEffect(() => {
+    async function requestLocationPermission() {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync()
+        
+        if (status === 'granted') {
+          setLocationPermissionGranted(true)
+          
+          // Fetch current location
+          const location = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Balanced,
+          })
+          
+          const { latitude, longitude } = location.coords
+          
+          // Store raw lat/lng
+          setUserLat(latitude)
+          setUserLng(longitude)
+          
+          // Convert to normalized map coordinates
+          const normalized = latLngToNormalized(latitude, longitude)
+          
+          // Check if within campus polygon, if not snap to boundary
+          let mapCoords = normalized
+          if (!pointInPolygon(normalized)) {
+            mapCoords = snapToPolygonBoundary(normalized)
+          }
+          
+          setUserMapX(mapCoords.x)
+          setUserMapY(mapCoords.y)
+        } else {
+          setLocationPermissionGranted(false)
+        }
+      } catch (error) {
+        console.error('Location permission error:', error)
+        setLocationPermissionGranted(false)
+      }
+    }
+
+    requestLocationPermission()
+  }, [])
 
   // Loading state: permissions are being checked
   if (!permission) {

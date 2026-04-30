@@ -12,7 +12,17 @@ import { publishPost } from '../helpers/postUpload';
  */
 export default function PostPublish() {
   const router = useRouter();
-  const { localImageUri, overlayText, category, isAnonymous, mapX, mapY, clearDraft } = useDraftPost();
+  const { 
+    localImageUri, 
+    overlayText, 
+    category, 
+    isAnonymous, 
+    mapX, 
+    mapY, 
+    userLat, 
+    userLng, 
+    clearDraft 
+  } = useDraftPost();
   const didSubmit = useRef(false);
 
   useEffect(() => {
@@ -24,7 +34,16 @@ export default function PostPublish() {
       return;
     }
 
-    publishPost({ localImageUri, overlayText, category, isAnonymous, mapX, mapY })
+    publishPost({ 
+      localImageUri, 
+      overlayText, 
+      category, 
+      isAnonymous, 
+      mapX, 
+      mapY,
+      latitude: userLat,
+      longitude: userLng,
+    })
       .then(() => {
         clearDraft();
         router.replace('/(tabs)/Map');
