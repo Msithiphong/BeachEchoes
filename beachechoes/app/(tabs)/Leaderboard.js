@@ -24,24 +24,22 @@ export default function Leaderboard() {
   // users = top users
   // posts = top posts/messages
   const [view, setView] = useState('users')
-  const [period, setPeriod] = useState('week')
+  // Removed period state (week/month toggle)
 
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [rows, setRows] = useState([])
   const [stats, setStats] = useState({ echoes: 0, appraises: 0, comments: 0 })
 
-  const togglePeriodValue = period === 'month' ? 'month' : 'week'
+  // Removed togglePeriodValue
 
   const leaderboardUrl = useMemo(() => {
     const params = new URLSearchParams({
       view,
-      period,
       limit: '50',
     })
-
     return `${API_BASE}/leaderboard?${params.toString()}`
-  }, [view, period])
+  }, [view])
 
   async function loadData() {
     setLoading(true)
@@ -92,7 +90,7 @@ export default function Leaderboard() {
   useEffect(() => {
     loadData()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [view, period])
+  }, [view])
 
   const topItem = rows.length ? rows[0] : null
   const listRows = rows.length > 1 ? rows.slice(1) : []
@@ -117,60 +115,9 @@ export default function Leaderboard() {
         >
           <Surface style={styles.headerBar} elevation={0}>
             <Text style={styles.headerTitle}>Leaderboard</Text>
-
-            <View style={styles.headerSpacer} />
-
-            <Button
-              mode="contained"
-              onPress={loadData}
-              disabled={loading}
-              style={styles.refreshBtn}
-              buttonColor="#ffffff"
-              textColor="#000000"
-            >
-              Refresh
-            </Button>
           </Surface>
 
           <Surface style={styles.filterWrap} elevation={0}>
-            <View style={styles.segmentRow}>
-              <Pressable
-                onPress={() => setPeriod('week')}
-                style={[
-                  styles.segmentPill,
-                  togglePeriodValue === 'week' && styles.segmentPillSelected,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.segmentPillText,
-                    togglePeriodValue === 'week' && styles.segmentPillTextSelected,
-                  ]}
-                >
-                  Week
-                </Text>
-              </Pressable>
-
-              <Pressable
-                onPress={() => setPeriod('month')}
-                style={[
-                  styles.segmentPill,
-                  togglePeriodValue === 'month' && styles.segmentPillSelected,
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.segmentPillText,
-                    togglePeriodValue === 'month' && styles.segmentPillTextSelected,
-                  ]}
-                >
-                  Month
-                </Text>
-              </Pressable>
-            </View>
-
-            <View style={styles.segmentGap} />
-
             <View style={styles.segmentRow}>
               <Pressable
                 onPress={() => setView('users')}
@@ -343,6 +290,7 @@ const styles = StyleSheet.create({
   shiftWrap: {
     alignSelf: 'flex-start',
     flex: 1,
+    marginTop: 50,
   },
 
   scroll: {
@@ -360,7 +308,7 @@ const styles = StyleSheet.create({
   headerBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderRadius: 14,
@@ -376,7 +324,9 @@ const styles = StyleSheet.create({
     color: '#000',
     fontSize: 32,
     fontWeight: 'bold',
-    marginLeft: 6,
+    marginLeft: 0,
+    textAlign: 'center',
+    flex: 1,
   },
   headerSpacer: {
     width: 20,
