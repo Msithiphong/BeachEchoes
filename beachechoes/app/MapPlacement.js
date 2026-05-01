@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -38,6 +38,7 @@ export default function MapPlacement() {
 
   const [pin, setPin] = useState(null); // { x, y } normalized
   const [isRefreshingLocation, setIsRefreshingLocation] = useState(false);
+  const mapRef = useRef(null);
 
   useEffect(() => {
     if (!localImageUri) {
@@ -58,6 +59,11 @@ export default function MapPlacement() {
         
         const { latitude, longitude } = location.coords;
         
+        if (process.env.EXPO_PUBLIC_DEBUG_GPS === 'true') {
+          console.log('🔄 MapPlacement: Refreshing location');
+          console.log(`  GPS: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}`);
+        }
+        
         // Store raw lat/lng
         setUserLat(latitude);
         setUserLng(longitude);
@@ -68,7 +74,14 @@ export default function MapPlacement() {
         // Check if within campus polygon, if not snap to boundary
         let mapCoords = normalized;
         if (!pointInPolygon(normalized)) {
+          if (process.env.EXPO_PUBLIC_DEBUG_GPS === 'true') {
+            console.log('⚠️  MapPlacement: GPS outside campus, snapping to boundary');
+          }
           mapCoords = snapToPolygonBoundary(normalized);
+        }
+        
+        if (process.env.EXPO_PUBLIC_DEBUG_GPS === 'true') {
+          console.log(`  Final: (${mapCoords.x.toFixed(4)}, ${mapCoords.y.toFixed(4)})`);
         }
         
         setUserMapX(mapCoords.x);
@@ -136,11 +149,15 @@ export default function MapPlacement() {
   function handleNearMePress() {
     if (!hasYouAreHere) return;
     
+    // Clear manual pin selection to show and select "You Are Here"
+    setPin(null);
+    
     // Center and zoom to "You Are Here" pin at 2x zoom
-    // Note: Implement zoom/center behavior in CampusMap if needed
-    // For now, we'll just show an alert as a placeholder
-    Alert.alert('Centering...', 'This feature will center the map on your location.');
-    // TODO: Implement actual zoom/center logic
+    mapRef.current?.centerTo({
+      x: userMapX,
+      y: userMapY,
+      zoom: 2,
+    });
   }
 
   function handleTap({ x, y }) {
@@ -200,7 +217,7 @@ export default function MapPlacement() {
 
       <ScrollView contentContainerStyle={styles.mapWrapper} showsVerticalScrollIndicator={false}>
         <View style={styles.mapCard}>
-          <CampusMap onTap={handleTap}>
+          <CampusMap ref={mapRef} onTap={handleTap}>
             {showYouAreHere && (
               <YouAreHerePin
                 centroid={youAreHereCoords}
@@ -228,6 +245,16 @@ export default function MapPlacement() {
               color={locationPermissionGranted ? '#2563eb' : '#94a3b8'}
             />
           </TouchableOpacity>
+          
+          {/* Debug Overlay - GPS Calibration Info */}
+          {process.env.EXPO_PUBLIC_DEBUG_GPS === 'true' && hasYouAreHere && (
+            <View style={styles.debugOverlay}>
+              <Text style={styles.debugTitle}>🗺️ GPS Debug (Affine)</Text>
+              <Text style={styles.debugText}>GPS: {userLat?.toFixed(6)}, {userLng?.toFixed(6)}</Text>
+              <Text style={styles.debugText}>Map: ({userMapX?.toFixed(5)}, {userMapY?.toFixed(5)})</Text>
+              <Text style={styles.debugText}>In Polygon: {pointInPolygon({ x: userMapX, y: userMapY }) ? '✅ YES' : '❌ NO'}</Text>
+            </View>
+          )}
         </View>
       </ScrollView>
 
@@ -355,4 +382,25 @@ const styles = StyleSheet.create({
   primaryBtnGradient: { paddingVertical: 14, alignItems: 'center', justifyContent: 'center' },
   disabledBtn: { opacity: 0.4 },
   primaryText: { color: '#fff', fontWeight: '700' },
+  debugOverlay: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    backgroundColor: 'rgba(15, 23, 42, 0.95)',
+    padding: 12,
+    borderRadius: 8,
+    maxWidth: '80%',
+  },
+  debugTitle: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  debugText: {
+    color: '#e2e8f0',
+    fontSize: 10,
+    fontFamily: 'monospace',
+    marginTop: 2,
+  },
 });

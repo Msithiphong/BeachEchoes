@@ -24,6 +24,14 @@ export default function YouAreHerePin({ centroid, mapWidth, mapHeight, onPress }
 
   const left = centroid.x * (mapWidth || 1);
   const top = centroid.y * (mapHeight || 1);
+  
+  // Debug logging for pin placement
+  if (process.env.EXPO_PUBLIC_DEBUG_GPS === 'true') {
+    console.log('📍 YouAreHerePin Render:');
+    console.log(`  Normalized: (${centroid.x.toFixed(4)}, ${centroid.y.toFixed(4)})`);
+    console.log(`  Map Size: ${mapWidth}×${mapHeight}px`);
+    console.log(`  Pin Position: left=${left.toFixed(1)}px, top=${top.toFixed(1)}px`);
+  }
 
   return (
     <TouchableOpacity

@@ -74,6 +74,11 @@ export default function CameraScreen() {
           
           const { latitude, longitude } = location.coords
           
+          if (process.env.EXPO_PUBLIC_DEBUG_GPS === 'true') {
+            console.log('📱 Camera: GPS location fetched');
+            console.log(`  Coordinates: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}`);
+          }
+          
           // Store raw lat/lng
           setUserLat(latitude)
           setUserLng(longitude)
@@ -84,7 +89,14 @@ export default function CameraScreen() {
           // Check if within campus polygon, if not snap to boundary
           let mapCoords = normalized
           if (!pointInPolygon(normalized)) {
+            if (process.env.EXPO_PUBLIC_DEBUG_GPS === 'true') {
+              console.log('⚠️  Camera: GPS outside campus polygon, snapping to boundary');
+            }
             mapCoords = snapToPolygonBoundary(normalized)
+          }
+          
+          if (process.env.EXPO_PUBLIC_DEBUG_GPS === 'true') {
+            console.log(`  Final map coords: (${mapCoords.x.toFixed(4)}, ${mapCoords.y.toFixed(4)})`);
           }
           
           setUserMapX(mapCoords.x)
