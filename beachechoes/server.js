@@ -8,6 +8,7 @@ import { VALID_CAMPUS_POLYGON } from './config/campusMap.js'
 import { DEFAULT_POST_CATEGORY, isValidPostCategory } from './config/postCategories.js'
 
 const require = createRequire(import.meta.url)
+const leoProfanity = require('leo-profanity')
 
 dotenv.config()
 
@@ -29,6 +30,24 @@ admin.initializeApp({
 });
 
 const bucket = admin.storage().bucket()
+
+// -------------------- MESSAGE / POST MODERATION --------------------
+
+// Add any extra custom blocked words here.
+const CUSTOM_BLOCKED_WORDS = [
+  'hell',
+  'exampleword'
+]
+
+leoProfanity.add(CUSTOM_BLOCKED_WORDS)
+
+function sanitizeMessage(text) {
+  let cleaned = leoProfanity.clean(text)
+  cleaned = cleaned.replace(/\*+/g, '******')
+  return cleaned
+}
+
+// ------------------ END MESSAGE / POST MODERATION ------------------
 
 // Auth middleware helpers
 function getBearerToken(req) {
@@ -135,9 +154,10 @@ app.post('/api/messages', requireFirebaseAuth, async (req, res) => {
     }
     
     // Insert message with user_id foreign key
+    const cleanedMessage = sanitizeMessage(message.trim())
     const result = await sql`
       INSERT INTO messages (user_id, message, created_at)
-      VALUES (${userId}, ${message}, NOW())
+      VALUES (${userId}, ${cleanedMessage}, NOW())
       RETURNING id, user_id, message, created_at
     `
     
@@ -972,7 +992,8 @@ app.post('/api/posts', requireFirebaseAuth, async (req, res) => {
 
     if (!imageBase64) return res.status(400).json({ success: false, error: 'imageBase64 is required' })
 
-    const text = String(overlayText).slice(0, 2000)
+    //const text = String(overlayText).slice(0, 2000)
+    const text = sanitizeMessage(String(overlayText).slice(0, 2000))
     const normalizedCategory = String(category || '').trim()
     if (!isValidPostCategory(normalizedCategory)) {
       return res.status(400).json({ success: false, error: 'Invalid category' })

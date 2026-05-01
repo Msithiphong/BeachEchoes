@@ -27,7 +27,6 @@ export default function AdminDashboard() {
         setSigningIn(true)
         try {
             await signInWithEmailAndPassword(auth, user.email, user.password)
-            // Immediately route to Dashboard after successful sign-in
             router.replace('/Dashboard')
         } catch (error) {
             console.error(`Sign in error for ${userName}:`, error)
@@ -71,9 +70,9 @@ export default function AdminDashboard() {
             <Button
                 mode="outlined"
                 onPress={async () => {
-                    const granted = await requestPermissions();
+                    const granted = await requestPermissions()
                     if (granted) {
-                        await sendLocalNotification();
+                        await sendLocalNotification()
                     }
                 }}
             >
@@ -87,7 +86,19 @@ export default function AdminDashboard() {
                 Messages
             </Button>
 
+            <Button
+                mode="outlined"
+                onPress={() => router.push('/MessageDisplay')}
+            >
+                Message Display
+            </Button>
+
+            <Button
+                mode="outlined"
+                onPress={() => router.push('/moderation')}
+            >
+                Content Moderation
+            </Button>
         </Background>
     )
-
 }
