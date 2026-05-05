@@ -67,10 +67,23 @@ export default function CameraScreen() {
         if (status === 'granted') {
           setLocationPermissionGranted(true)
           
-          // Fetch current location
-          const location = await Location.getCurrentPositionAsync({
-            accuracy: Location.Accuracy.Balanced,
-          })
+          // Fetch current location with Android emulator compatibility
+          let location
+          try {
+            location = await Location.getCurrentPositionAsync({
+              accuracy: Location.Accuracy.Balanced,
+              timeInterval: 5000,
+              maximumAge: 10000,
+            })
+          } catch (currentPosError) {
+            // Fallback to last known position for Android emulators
+            console.log('getCurrentPosition failed, trying last known position:', currentPosError.message)
+            location = await Location.getLastKnownPositionAsync()
+            
+            if (!location) {
+              throw new Error('No location available')
+            }
+          }
           
           const { latitude, longitude } = location.coords
           

@@ -53,9 +53,24 @@ export default function MapPlacement() {
       
       try {
         setIsRefreshingLocation(true);
-        const location = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Balanced,
-        });
+        let location;
+        
+        try {
+          // Try to get current position with timeout (Android emulators often fail here)
+          location = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Balanced,
+            timeInterval: 5000, // 5 second timeout
+            maximumAge: 10000,  // Accept cached location up to 10 seconds old
+          });
+        } catch (currentPosError) {
+          // Fallback to last known position (works better on Android emulators)
+          console.log('getCurrentPosition failed, trying last known position:', currentPosError.message);
+          location = await Location.getLastKnownPositionAsync();
+          
+          if (!location) {
+            throw new Error('No location available. Make sure location services are enabled.');
+          }
+        }
         
         const { latitude, longitude } = location.coords;
         
@@ -118,9 +133,22 @@ export default function MapPlacement() {
         
         // Fetch location immediately
         setIsRefreshingLocation(true);
-        const location = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Balanced,
-        });
+        let location;
+        
+        try {
+          location = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Balanced,
+            timeInterval: 5000,
+            maximumAge: 10000,
+          });
+        } catch (currentPosError) {
+          console.log('getCurrentPosition failed, trying last known position:', currentPosError.message);
+          location = await Location.getLastKnownPositionAsync();
+          
+          if (!location) {
+            throw new Error('No location available');
+          }
+        }
         
         const { latitude, longitude } = location.coords;
         
