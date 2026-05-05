@@ -6,6 +6,7 @@ import {
   StyleSheet,
   ScrollView,
   Alert,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -19,10 +20,11 @@ import { pointInPolygon, latLngToNormalized, snapToPolygonBoundary } from '../he
 
 export default function MapPlacement() {
   const router = useRouter();
-  const { 
-    localImageUri, 
-    setMapX, 
-    setMapY, 
+
+  const {
+    localImageUri,
+    setMapX,
+    setMapY,
     clearDraft,
     userLat,
     setUserLat,
@@ -36,7 +38,7 @@ export default function MapPlacement() {
     setLocationPermissionGranted,
   } = useDraftPost();
 
-  const [pin, setPin] = useState(null); // { x, y } normalized
+  const [pin, setPin] = useState(null);
   const [isRefreshingLocation, setIsRefreshingLocation] = useState(false);
   const mapRef = useRef(null);
 
@@ -46,141 +48,185 @@ export default function MapPlacement() {
     }
   }, [localImageUri, router]);
 
-  // Refresh location when MapPlacement is entered
+  function clearUserLocation() {
+    setUserLat(null);
+    setUserLng(null);
+    setUserMapX(null);
+    setUserMapY(null);
+  }
+
+  function applyLocationToDraft(location) {
+    const { latitude, longitude } = location.coords;
+
+    setUserLat(latitude);
+    setUserLng(longitude);
+
+    const normalized = latLngToNormalized(latitude, longitude);
+
+    let mapCoords = normalized;
+
+    if (!pointInPolygon(normalized)) {
+      mapCoords = snapToPolygonBoundary(normalized);
+    }
+
+    setUserMapX(mapCoords.x);
+    setUserMapY(mapCoords.y);
+
+    if (process.env.EXPO_PUBLIC_DEBUG_GPS === 'true') {
+      console.log('MapPlacement: real GPS location applied');
+      console.log(`GPS: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}`);
+      console.log(`Map: (${mapCoords.x.toFixed(4)}, ${mapCoords.y.toFixed(4)})`);
+    }
+  }
+
+  async function getRealLocation({ showAlerts = false } = {}) {
+    const servicesEnabled = await Location.hasServicesEnabledAsync();
+
+    if (!servicesEnabled) {
+      if (showAlerts) {
+        Alert.alert(
+          'Location Services Off',
+          'Turn on Android location services, then try again.'
+        );
+      }
+
+      return null;
+    }
+
+    const permission = await Location.requestForegroundPermissionsAsync();
+
+    if (permission.status !== 'granted') {
+      setLocationPermissionGranted(false);
+
+      if (showAlerts) {
+        Alert.alert(
+          'Location Permission Needed',
+          'Allow location permission to use your current location.'
+        );
+      }
+
+      return null;
+    }
+
+    setLocationPermissionGranted(true);
+
+    let location = null;
+
+    try {
+      location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+        mayShowUserSettingsDialog: Platform.OS === 'android',
+      });
+    } catch (currentPositionError) {
+      console.log('getCurrentPosition failed:', currentPositionError.message);
+
+      try {
+        location = await Location.getLastKnownPositionAsync({
+          maxAge: 30000,
+          requiredAccuracy: 100,
+        });
+      } catch (lastKnownError) {
+        console.log('getLastKnownPosition failed:', lastKnownError.message);
+      }
+    }
+
+    if (!location) {
+      if (showAlerts) {
+        Alert.alert(
+          'No GPS Location',
+          'Android did not return a real GPS location. In the emulator, set a location and press SET LOCATION, then try again.'
+        );
+      }
+
+      return null;
+    }
+
+    return location;
+  }
+
   useEffect(() => {
-    async function refreshLocation() {
-      if (!locationPermissionGranted) return;
-      
+    async function refreshLocationOnLoad() {
       try {
         setIsRefreshingLocation(true);
-        let location;
-        
-        try {
-          // Try to get current position with timeout (Android emulators often fail here)
-          location = await Location.getCurrentPositionAsync({
-            accuracy: Location.Accuracy.Balanced,
-            timeInterval: 5000, // 5 second timeout
-            maximumAge: 10000,  // Accept cached location up to 10 seconds old
-          });
-        } catch (currentPosError) {
-          // Fallback to last known position (works better on Android emulators)
-          console.log('getCurrentPosition failed, trying last known position:', currentPosError.message);
-          location = await Location.getLastKnownPositionAsync();
-          
-          if (!location) {
-            throw new Error('No location available. Make sure location services are enabled.');
-          }
+
+        const location = await getRealLocation({ showAlerts: false });
+
+        if (!location) {
+          clearUserLocation();
+          return;
         }
-        
-        const { latitude, longitude } = location.coords;
-        
-        if (process.env.EXPO_PUBLIC_DEBUG_GPS === 'true') {
-          console.log('🔄 MapPlacement: Refreshing location');
-          console.log(`  GPS: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}`);
-        }
-        
-        // Store raw lat/lng
-        setUserLat(latitude);
-        setUserLng(longitude);
-        
-        // Convert to normalized map coordinates
-        const normalized = latLngToNormalized(latitude, longitude);
-        
-        // Check if within campus polygon, if not snap to boundary
-        let mapCoords = normalized;
-        if (!pointInPolygon(normalized)) {
-          if (process.env.EXPO_PUBLIC_DEBUG_GPS === 'true') {
-            console.log('⚠️  MapPlacement: GPS outside campus, snapping to boundary');
-          }
-          mapCoords = snapToPolygonBoundary(normalized);
-        }
-        
-        if (process.env.EXPO_PUBLIC_DEBUG_GPS === 'true') {
-          console.log(`  Final: (${mapCoords.x.toFixed(4)}, ${mapCoords.y.toFixed(4)})`);
-        }
-        
-        setUserMapX(mapCoords.x);
-        setUserMapY(mapCoords.y);
+
+        applyLocationToDraft(location);
       } catch (error) {
-        console.error('Location refresh error:', error);
-        Alert.alert('Location Error', 'Failed to refresh your location. You can still select a spot manually.');
+        console.log('Location refresh failed:', error.message);
+        clearUserLocation();
       } finally {
         setIsRefreshingLocation(false);
       }
     }
 
-    refreshLocation();
+    refreshLocationOnLoad();
   }, []);
 
   if (!localImageUri) {
     return null;
   }
 
-  const hasYouAreHere = locationPermissionGranted && userMapX != null && userMapY != null;
+  const hasYouAreHere =
+    userLat != null &&
+    userLng != null &&
+    userMapX != null &&
+    userMapY != null;
+
   const youAreHereCoords = hasYouAreHere ? { x: userMapX, y: userMapY } : null;
 
-  // Determine which pin to show: only one pin at a time
-  // If user has selected a spot, show that; otherwise show "You Are Here" if available
   const showYouAreHere = hasYouAreHere && !pin;
   const showSelectedPin = pin != null;
 
   async function handleRequestLocation() {
     try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
-      
-      if (status === 'granted') {
-        setLocationPermissionGranted(true);
-        
-        // Fetch location immediately
-        setIsRefreshingLocation(true);
-        let location;
-        
-        try {
-          location = await Location.getCurrentPositionAsync({
-            accuracy: Location.Accuracy.Balanced,
-            timeInterval: 5000,
-            maximumAge: 10000,
-          });
-        } catch (currentPosError) {
-          console.log('getCurrentPosition failed, trying last known position:', currentPosError.message);
-          location = await Location.getLastKnownPositionAsync();
-          
-          if (!location) {
-            throw new Error('No location available');
-          }
-        }
-        
-        const { latitude, longitude } = location.coords;
-        
-        setUserLat(latitude);
-        setUserLng(longitude);
-        
-        const normalized = latLngToNormalized(latitude, longitude);
-        let mapCoords = normalized;
-        if (!pointInPolygon(normalized)) {
-          mapCoords = snapToPolygonBoundary(normalized);
-        }
-        
-        setUserMapX(mapCoords.x);
-        setUserMapY(mapCoords.y);
-        setIsRefreshingLocation(false);
-      } else {
-        setLocationPermissionGranted(false);
-        Alert.alert('Permission Denied', 'Location permission is required to use the "You Are Here" feature.');
+      setIsRefreshingLocation(true);
+
+      const location = await getRealLocation({ showAlerts: true });
+
+      if (!location) {
+        clearUserLocation();
+        return;
       }
+
+      applyLocationToDraft(location);
+      setPin(null);
+
+      const normalized = latLngToNormalized(
+        location.coords.latitude,
+        location.coords.longitude
+      );
+
+      const mapCoords = pointInPolygon(normalized)
+        ? normalized
+        : snapToPolygonBoundary(normalized);
+
+      mapRef.current?.centerTo({
+        x: mapCoords.x,
+        y: mapCoords.y,
+        zoom: 2,
+      });
     } catch (error) {
-      console.error('Location request error:', error);
+      console.log('Location request failed:', error.message);
+      clearUserLocation();
+    } finally {
       setIsRefreshingLocation(false);
     }
   }
 
   function handleNearMePress() {
-    if (!hasYouAreHere) return;
-    
-    // Clear manual pin selection to show and select "You Are Here"
+    if (!hasYouAreHere) {
+      handleRequestLocation();
+      return;
+    }
+
     setPin(null);
-    
-    // Center and zoom to "You Are Here" pin at 2x zoom
+
     mapRef.current?.centerTo({
       x: userMapX,
       y: userMapY,
@@ -193,13 +239,13 @@ export default function MapPlacement() {
       Alert.alert('Outside campus', 'Please tap a location on the CSULB campus.');
       return;
     }
+
     setPin({ x, y });
   }
 
   function handleYouAreHereTap() {
-    // Re-select "You Are Here" as the post location
     if (hasYouAreHere) {
-      setPin(null); // Clear manual selection to show "You Are Here"
+      setPin(null);
     }
   }
 
@@ -213,16 +259,15 @@ export default function MapPlacement() {
   }
 
   function handlePublish() {
-    // Use selected pin if available, otherwise use "You Are Here"
     const finalCoords = pin || youAreHereCoords;
-    
+
     if (!finalCoords) {
       Alert.alert('No location', 'Tap a spot on the campus map before publishing.');
       return;
     }
+
     setMapX(finalCoords.x);
     setMapY(finalCoords.y);
-    // MapPlacement triggers publish; navigate to postUpload handler via PostPublish
     router.push('/PostPublish');
   }
 
@@ -236,8 +281,19 @@ export default function MapPlacement() {
       <View style={styles.headerCard}>
         <Text style={styles.heading}>Pin Your Echo</Text>
         <Text style={styles.sub}>Tap one spot on campus to publish your post.</Text>
-        <View style={[styles.statusChip, (pin || hasYouAreHere) ? styles.statusChipReady : styles.statusChipWaiting]}>
-          <Text style={[styles.statusText, (pin || hasYouAreHere) ? styles.statusTextReady : styles.statusTextWaiting]}>
+
+        <View
+          style={[
+            styles.statusChip,
+            pin || hasYouAreHere ? styles.statusChipReady : styles.statusChipWaiting,
+          ]}
+        >
+          <Text
+            style={[
+              styles.statusText,
+              pin || hasYouAreHere ? styles.statusTextReady : styles.statusTextWaiting,
+            ]}
+          >
             {pin ? 'Location selected' : hasYouAreHere ? 'Using your location' : 'Select a location'}
           </Text>
         </View>
@@ -252,6 +308,7 @@ export default function MapPlacement() {
                 onPress={handleYouAreHereTap}
               />
             )}
+
             {showSelectedPin && (
               <ClusteredPin
                 centroid={pin}
@@ -260,27 +317,31 @@ export default function MapPlacement() {
               />
             )}
           </CampusMap>
-          
-          {/* NearMe / NearMeDisabled Icon */}
+
           <TouchableOpacity
             style={styles.nearMeButton}
-            onPress={locationPermissionGranted ? handleNearMePress : handleRequestLocation}
+            onPress={handleNearMePress}
             disabled={isRefreshingLocation}
           >
             <MaterialIcons
-              name={locationPermissionGranted ? 'near-me' : 'near-me-disabled'}
+              name={hasYouAreHere ? 'near-me' : 'near-me-disabled'}
               size={24}
-              color={locationPermissionGranted ? '#2563eb' : '#94a3b8'}
+              color={hasYouAreHere ? '#2563eb' : '#94a3b8'}
             />
           </TouchableOpacity>
-          
-          {/* Debug Overlay - GPS Calibration Info */}
+
           {process.env.EXPO_PUBLIC_DEBUG_GPS === 'true' && hasYouAreHere && (
             <View style={styles.debugOverlay}>
-              <Text style={styles.debugTitle}>🗺️ GPS Debug (Affine)</Text>
-              <Text style={styles.debugText}>GPS: {userLat?.toFixed(6)}, {userLng?.toFixed(6)}</Text>
-              <Text style={styles.debugText}>Map: ({userMapX?.toFixed(5)}, {userMapY?.toFixed(5)})</Text>
-              <Text style={styles.debugText}>In Polygon: {pointInPolygon({ x: userMapX, y: userMapY }) ? '✅ YES' : '❌ NO'}</Text>
+              <Text style={styles.debugTitle}>GPS Debug</Text>
+              <Text style={styles.debugText}>
+                GPS: {userLat?.toFixed(6)}, {userLng?.toFixed(6)}
+              </Text>
+              <Text style={styles.debugText}>
+                Map: ({userMapX?.toFixed(5)}, {userMapY?.toFixed(5)})
+              </Text>
+              <Text style={styles.debugText}>
+                In Polygon: {pointInPolygon({ x: userMapX, y: userMapY }) ? 'YES' : 'NO'}
+              </Text>
             </View>
           )}
         </View>
@@ -290,9 +351,11 @@ export default function MapPlacement() {
         <TouchableOpacity style={styles.secondaryBtn} onPress={handleBack}>
           <Text style={styles.secondaryText}>Back</Text>
         </TouchableOpacity>
+
         <TouchableOpacity style={styles.ghostBtn} onPress={handleCancel}>
           <Text style={styles.ghostText}>Cancel</Text>
         </TouchableOpacity>
+
         <TouchableOpacity
           style={[styles.primaryBtn, !(pin || hasYouAreHere) && styles.disabledBtn]}
           onPress={handlePublish}
@@ -314,6 +377,7 @@ export default function MapPlacement() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+
   headerCard: {
     marginTop: 16,
     marginHorizontal: 16,
@@ -326,16 +390,19 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 2,
   },
+
   heading: {
     fontSize: 24,
     fontWeight: '800',
     color: '#0f172a',
   },
+
   sub: {
     fontSize: 14,
     color: '#334155',
     marginTop: 5,
   },
+
   statusChip: {
     alignSelf: 'flex-start',
     marginTop: 12,
@@ -343,12 +410,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 6,
   },
+
   statusChipReady: { backgroundColor: '#dcfce7' },
   statusChipWaiting: { backgroundColor: '#e2e8f0' },
-  statusText: { fontSize: 12, fontWeight: '700' },
+
+  statusText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+
   statusTextReady: { color: '#166534' },
   statusTextWaiting: { color: '#334155' },
-  mapWrapper: { paddingHorizontal: 16, paddingVertical: 12 },
+
+  mapWrapper: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+
   mapCard: {
     borderRadius: 18,
     overflow: 'hidden',
@@ -361,6 +439,7 @@ const styles = StyleSheet.create({
     elevation: 2,
     position: 'relative',
   },
+
   nearMeButton: {
     position: 'absolute',
     bottom: 16,
@@ -377,11 +456,13 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 3,
   },
+
   actions: {
     flexDirection: 'row',
     gap: 8,
     padding: 16,
   },
+
   secondaryBtn: {
     flex: 1,
     paddingVertical: 14,
@@ -391,7 +472,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: 'rgba(255,255,255,0.78)',
   },
-  secondaryText: { color: '#0f172a', fontWeight: '700' },
+
+  secondaryText: {
+    color: '#0f172a',
+    fontWeight: '700',
+  },
+
   ghostBtn: {
     flex: 1,
     paddingVertical: 14,
@@ -401,15 +487,33 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: 'rgba(255,255,255,0.65)',
   },
-  ghostText: { color: '#475569', fontWeight: '700' },
+
+  ghostText: {
+    color: '#475569',
+    fontWeight: '700',
+  },
+
   primaryBtn: {
     flex: 1,
     borderRadius: 14,
     overflow: 'hidden',
   },
-  primaryBtnGradient: { paddingVertical: 14, alignItems: 'center', justifyContent: 'center' },
-  disabledBtn: { opacity: 0.4 },
-  primaryText: { color: '#fff', fontWeight: '700' },
+
+  primaryBtnGradient: {
+    paddingVertical: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  disabledBtn: {
+    opacity: 0.4,
+  },
+
+  primaryText: {
+    color: '#fff',
+    fontWeight: '700',
+  },
+
   debugOverlay: {
     position: 'absolute',
     top: 8,
@@ -419,12 +523,14 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     maxWidth: '80%',
   },
+
   debugTitle: {
     color: '#fff',
     fontSize: 12,
     fontWeight: '700',
     marginBottom: 4,
   },
+
   debugText: {
     color: '#e2e8f0',
     fontSize: 10,
