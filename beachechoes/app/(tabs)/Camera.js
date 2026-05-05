@@ -1,27 +1,16 @@
 /**
  * CameraScreen Component
- * 
- * Provides camera functionality for capturing photos within the BeachEchoes app.
- * This screen handles camera permissions, displays the camera preview, and manages
- * photo capture with quality optimization.
- * 
- * Features:
- * - Request and manage camera permissions
- * - Live camera preview
- * - Photo capture with quality settings
- * - Loading state during capture
- * - Navigation back to previous screen
- * 
- * @component
  */
 
-import React, { useRef, useState } from 'react'
+import React, { useRef, useState, useEffect } from 'react'
 import { View, TouchableOpacity, StyleSheet, Text, ActivityIndicator, Platform } from 'react-native'
 import { useRouter } from 'expo-router'
 import { CameraView, useCameraPermissions } from 'expo-camera'
+import * as Location from 'expo-location'
 import BackButton from '../../components/BackButton'
 import { theme } from '../../core/theme'
 import { useDraftPost } from '../../context/DraftPostContext'
+import { latLngToNormalized, pointInPolygon, snapToPolygonBoundary } from '../../helpers/mapUtils'
 
 function parseExifDate(value) {
   if (!value || typeof value !== 'string') return null
@@ -31,22 +20,103 @@ function parseExifDate(value) {
 }
 
 export default function CameraScreen() {
-  // Navigation hook for routing
   const router = useRouter()
-  
-  // Camera permission state and request function from expo-camera
   const [permission, requestPermission] = useCameraPermissions()
-  
-  // Reference to the camera component for taking pictures
   const cameraRef = useRef(null)
-  
-  // State to prevent multiple simultaneous photo captures
+
   const [isTakingPicture, setIsTakingPicture] = useState(false)
   const [cameraError, setCameraError] = useState(null)
 
-  const { setLocalImageUri, setCapturedAt, clearDraft } = useDraftPost()
+  const {
+    setLocalImageUri,
+    setCapturedAt,
+    clearDraft,
+    setUserLat,
+    setUserLng,
+    setUserMapX,
+    setUserMapY,
+    setLocationPermissionGranted,
+  } = useDraftPost()
 
-  // Loading state: permissions are being checked
+  useEffect(() => {
+    async function requestLocationPermission() {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync()
+
+        if (status !== 'granted') {
+          console.log('Location permission not granted, using CSULB fallback location')
+          setLocationPermissionGranted(false)
+          applyLocationToDraft(CSULB_FALLBACK_LOCATION)
+          return
+        }
+
+        setLocationPermissionGranted(true)
+
+        let location = null
+
+        try {
+          location = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Balanced,
+          })
+        } catch (currentPosError) {
+          console.log(
+            'getCurrentPosition failed, trying last known position:',
+            currentPosError.message
+          )
+
+          try {
+            location = await Location.getLastKnownPositionAsync({})
+          } catch (lastKnownError) {
+            console.log('Last known location also failed:', lastKnownError.message)
+          }
+        }
+
+        if (!location) {
+          console.log('No location available, using CSULB fallback location')
+          location = CSULB_FALLBACK_LOCATION
+        }
+
+        applyLocationToDraft(location)
+      } catch (error) {
+        console.log('Location unavailable, using CSULB fallback:', error.message)
+        setLocationPermissionGranted(false)
+        applyLocationToDraft(CSULB_FALLBACK_LOCATION)
+      }
+    }
+
+    function applyLocationToDraft(location) {
+      const { latitude, longitude } = location.coords
+
+      if (process.env.EXPO_PUBLIC_DEBUG_GPS === 'true') {
+        console.log('📱 Camera: location set')
+        console.log(`Coordinates: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}`)
+      }
+
+      setUserLat(latitude)
+      setUserLng(longitude)
+
+      const normalized = latLngToNormalized(latitude, longitude)
+
+      let mapCoords = normalized
+      if (!pointInPolygon(normalized)) {
+        if (process.env.EXPO_PUBLIC_DEBUG_GPS === 'true') {
+          console.log('Camera: GPS outside campus polygon, snapping to boundary')
+        }
+
+        mapCoords = snapToPolygonBoundary(normalized)
+      }
+
+      if (process.env.EXPO_PUBLIC_DEBUG_GPS === 'true') {
+        console.log(`Final map coords: (${mapCoords.x.toFixed(4)}, ${mapCoords.y.toFixed(4)})`)
+      }
+
+      setUserMapX(mapCoords.x)
+      setUserMapY(mapCoords.y)
+    }
+
+    requestLocationPermission()
+  }, [])
+
   if (!permission) {
     return (
       <View style={[styles.container, styles.centered]}>
@@ -56,7 +126,6 @@ export default function CameraScreen() {
     )
   }
 
-  // Permission not granted: show permission request button
   if (!permission.granted) {
     return (
       <View style={[styles.container, styles.centered]}>
@@ -92,36 +161,28 @@ export default function CameraScreen() {
     )
   }
 
-  /**
-   * Captures a photo using the camera
-   * 
-   * Prevents multiple simultaneous captures and handles photo quality settings.
-   * Currently logs the photo URI for debugging. Future implementation will
-   * save or upload the photo to the backend.
-   * 
-   * @async
-   */
   const takePicture = async () => {
-    // Prevent multiple captures at once
     if (isTakingPicture) return
     setIsTakingPicture(true)
-    
+
     try {
-      // Capture photo with 80% quality for optimal size/quality balance
       const photo = await cameraRef.current?.takePictureAsync({
         quality: 0.8,
-        // Keep Android capture path stable on emulators/devices that return black processed frames.
         skipProcessing: Platform.OS === 'android',
         exif: true,
       })
+
       if (!photo?.uri) {
         throw new Error('Camera returned an empty photo result.')
       }
+
       const exifDate =
         photo?.exif?.DateTimeOriginal ||
         photo?.exif?.DateTimeDigitized ||
         photo?.exif?.DateTime
+
       const exifMs = parseExifDate(exifDate)
+
       const timestampMs = Number.isFinite(photo?.timestamp)
         ? photo.timestamp
         : exifMs || Date.now()
@@ -131,17 +192,14 @@ export default function CameraScreen() {
       setCapturedAt(new Date(timestampMs).toISOString())
       router.push('/EditPost')
     } catch (error) {
-      console.error('Camera error:', error)
+      console.log('Camera error:', error.message)
     } finally {
-      // Re-enable capture button
       setIsTakingPicture(false)
     }
   }
 
-  // Main camera view with preview and controls
   return (
     <View style={styles.container}>
-      {/* Camera preview container with back button overlay */}
       <View style={styles.cameraContainer}>
         <CameraView
           style={styles.camera}
@@ -149,13 +207,12 @@ export default function CameraScreen() {
           onMountError={(event) => {
             const message = event?.nativeEvent?.message || 'Unknown camera error.'
             setCameraError(message)
-            console.error('Camera mount error:', message)
+            console.log('Camera mount error:', message)
           }}
         />
         <BackButton goBack={() => router.back()} />
       </View>
-      
-      {/* Capture button - styled as circular shutter button */}
+
       <TouchableOpacity
         style={styles.captureButton}
         onPress={takePicture}
@@ -167,11 +224,7 @@ export default function CameraScreen() {
   )
 }
 
-/**
- * Styles for the camera screen
- */
 const styles = StyleSheet.create({
-  // Main container - full screen with black background
   container: {
     flex: 1,
     backgroundColor: '#000',
@@ -182,12 +235,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     gap: 14,
   },
-  // Container for camera preview with absolute positioning support
   cameraContainer: {
     flex: 1,
     position: 'relative',
   },
-  // Camera preview fills its container
   camera: {
     flex: 1,
   },

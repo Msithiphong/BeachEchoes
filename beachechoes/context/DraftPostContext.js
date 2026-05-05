@@ -11,6 +11,13 @@ export function DraftPostProvider({ children }) {
   const [mapY, setMapY] = useState(null);
   const [capturedAt, setCapturedAt] = useState(null);
   const [category, setCategory] = useState(DEFAULT_POST_CATEGORY);
+  
+  // Location fields for "You Are Here" feature
+  const [userLat, setUserLat] = useState(null);
+  const [userLng, setUserLng] = useState(null);
+  const [userMapX, setUserMapX] = useState(null);
+  const [userMapY, setUserMapY] = useState(null);
+  const [locationPermissionGranted, setLocationPermissionGranted] = useState(false);
 
   function clearDraft() {
     setLocalImageUri(null);
@@ -20,6 +27,11 @@ export function DraftPostProvider({ children }) {
     setMapY(null);
     setCapturedAt(null);
     setCategory(DEFAULT_POST_CATEGORY);
+    setUserLat(null);
+    setUserLng(null);
+    setUserMapX(null);
+    setUserMapY(null);
+    // Note: Don't clear locationPermissionGranted as it persists across posts
   }
 
   return (
@@ -39,6 +51,16 @@ export function DraftPostProvider({ children }) {
         setCapturedAt,
         category,
         setCategory,
+        userLat,
+        setUserLat,
+        userLng,
+        setUserLng,
+        userMapX,
+        setUserMapX,
+        userMapY,
+        setUserMapY,
+        locationPermissionGranted,
+        setLocationPermissionGranted,
         clearDraft,
       }}
     >

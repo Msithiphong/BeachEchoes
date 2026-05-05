@@ -5,7 +5,8 @@ import { API_BASE } from '../config/api';
  * Publish a draft post to the backend.
  *
  * Converts the local image URI to base64, then sends the image data,
- * overlay text, and normalized map coordinates to POST /api/posts.
+ * overlay text, normalized map coordinates, and optional GPS coordinates
+ * to POST /api/posts.
  *
  * @param {object} draft
  * @param {string} draft.localImageUri - local file URI from expo-camera
@@ -14,9 +15,11 @@ import { API_BASE } from '../config/api';
  * @param {boolean} draft.isAnonymous  - true if post should hide author identity
  * @param {number} draft.mapX          - normalized x coordinate [0,1]
  * @param {number} draft.mapY          - normalized y coordinate [0,1]
+ * @param {number} [draft.latitude]    - GPS latitude (optional)
+ * @param {number} [draft.longitude]   - GPS longitude (optional)
  * @returns {Promise<{ id: number, image_url: string }>} the created post
  */
-export async function publishPost({ localImageUri, overlayText, category, isAnonymous, mapX, mapY }) {
+export async function publishPost({ localImageUri, overlayText, category, isAnonymous, mapX, mapY, latitude, longitude }) {
   const token = await auth.currentUser?.getIdToken();
   if (!token) throw new Error('User not authenticated');
 
@@ -44,6 +47,8 @@ export async function publishPost({ localImageUri, overlayText, category, isAnon
             isAnonymous: !!isAnonymous,
             mapX,
             mapY,
+            latitude: latitude != null ? latitude : null,
+            longitude: longitude != null ? longitude : null,
           }),
         });
 

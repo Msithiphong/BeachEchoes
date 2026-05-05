@@ -22,9 +22,21 @@
 import { Platform } from 'react-native'
 
 /**
+ * Ngrok URL for testing on physical devices
+ * When running ngrok (ngrok http 3000), paste the forwarding URL here
+ * Example: 'https://abcd-123-45-67-89.ngrok-free.app'
+ * 
+ * Set to null to use platform-specific localhost URLs
+ * @constant {string|null}
+ */
+// const NGROK_URL = 'https://friction-referable-spinster.ngrok-free.dev'
+const NGROK_URL = null
+
+/**
  * Get the API base URL based on the platform and environment
  * 
  * Development:
+ * - If NGROK_URL is set: Uses ngrok URL (works on any device)
  * - iOS Simulator: Uses localhost:3000
  * - Android Emulator: Uses 10.0.2.2:3000 (special Android emulator IP)
  * - Physical Devices: Replace LOCAL_IP with your computer's IP address
@@ -36,7 +48,12 @@ import { Platform } from 'react-native'
  */
 const getApiUrl = () => {
   if (__DEV__) {
-    // Development mode
+    // Use ngrok if configured (works on any platform/device)
+    if (NGROK_URL) {
+      return NGROK_URL
+    }
+    
+    // Development mode - platform-specific localhost
     if (Platform.OS === 'android') {
       // Android emulator uses 10.0.2.2 to access host machine's localhost
       return 'http://10.0.2.2:3000'
@@ -47,10 +64,10 @@ const getApiUrl = () => {
       // return 'http://192.168.1.XXX:3000'
     } else {
       // iOS simulator can use localhost directly
-      return 'http://localhost:3000'
+      // return 'http://localhost:3000'
 
       // For testing iOS on Max's PC
-      // return 'http://192.168.1.117:3000'
+      return 'http://192.168.1.117:3000'
     }
   }
   

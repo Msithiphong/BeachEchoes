@@ -987,6 +987,8 @@ app.post('/api/posts', requireFirebaseAuth, async (req, res) => {
       isAnonymous = false,
       mapX,
       mapY,
+      latitude = null,
+      longitude = null,
       contentType = 'image/jpeg',
     } = req.body
 
@@ -1002,6 +1004,9 @@ app.post('/api/posts', requireFirebaseAuth, async (req, res) => {
     const x = parseFloat(mapX)
     const y = parseFloat(mapY)
     const anonymous = Boolean(isAnonymous)
+    const lat = latitude != null ? parseFloat(latitude) : null
+    const lng = longitude != null ? parseFloat(longitude) : null
+    
     if (isNaN(x) || isNaN(y) || x < 0 || x > 1 || y < 0 || y > 1) {
       return res.status(400).json({ success: false, error: 'map_x and map_y must be between 0 and 1' })
     }
@@ -1026,8 +1031,8 @@ app.post('/api/posts', requireFirebaseAuth, async (req, res) => {
 
     const result = hasAnonymousColumn
       ? await sql`
-          INSERT INTO posts (user_id, image_url, overlay_text, category, is_anonymous, map_x, map_y)
-          VALUES (${userId}, ${imageUrl}, ${text}, ${normalizedCategory}, ${anonymous}, ${x}, ${y})
+          INSERT INTO posts (user_id, image_url, overlay_text, category, is_anonymous, map_x, map_y, latitude, longitude)
+          VALUES (${userId}, ${imageUrl}, ${text}, ${normalizedCategory}, ${anonymous}, ${x}, ${y}, ${lat}, ${lng})
           RETURNING
             id,
             image_url,
@@ -1036,12 +1041,14 @@ app.post('/api/posts', requireFirebaseAuth, async (req, res) => {
             is_anonymous,
             map_x,
             map_y,
+            latitude,
+            longitude,
             created_at,
             created_at + ${POST_TTL_INTERVAL}::interval AS expires_at
         `
       : await sql`
-          INSERT INTO posts (user_id, image_url, overlay_text, category, map_x, map_y)
-          VALUES (${userId}, ${imageUrl}, ${text}, ${normalizedCategory}, ${x}, ${y})
+          INSERT INTO posts (user_id, image_url, overlay_text, category, map_x, map_y, latitude, longitude)
+          VALUES (${userId}, ${imageUrl}, ${text}, ${normalizedCategory}, ${x}, ${y}, ${lat}, ${lng})
           RETURNING
             id,
             image_url,
@@ -1050,6 +1057,8 @@ app.post('/api/posts', requireFirebaseAuth, async (req, res) => {
             FALSE AS is_anonymous,
             map_x,
             map_y,
+            latitude,
+            longitude,
             created_at,
             created_at + ${POST_TTL_INTERVAL}::interval AS expires_at
         `
