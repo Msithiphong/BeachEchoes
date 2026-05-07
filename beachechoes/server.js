@@ -1242,6 +1242,7 @@ app.get('/api/posts/feed', async (req, res) => {
             p.image_url,
             p.overlay_text,
             p.created_at,
+            COALESCE(p.comment_count, 0)::int AS comment_count,
             COALESCE(l.like_count, 0)::int AS like_count,
             CASE WHEN ${viewerUserId}::int IS NOT NULL AND ul.user_id IS NOT NULL THEN TRUE ELSE FALSE END AS liked,
             CASE WHEN p.is_anonymous THEN 'Anonymous' ELSE u.name END AS username,
@@ -1273,6 +1274,7 @@ app.get('/api/posts/feed', async (req, res) => {
             p.image_url,
             p.overlay_text,
             p.created_at,
+            COALESCE(p.comment_count, 0)::int AS comment_count,
             COALESCE(l.like_count, 0)::int AS like_count,
             CASE WHEN ${viewerUserId}::int IS NOT NULL AND ul.user_id IS NOT NULL THEN TRUE ELSE FALSE END AS liked,
             u.name AS username,
@@ -1335,6 +1337,7 @@ app.get('/api/posts/user/:userId', async (req, res) => {
             p.overlay_text,
             p.is_anonymous,
             p.created_at,
+            COALESCE(p.comment_count, 0)::int AS comment_count,
             COALESCE(l.like_count, 0)::int AS like_count,
             CASE WHEN ${viewerUserId}::int IS NOT NULL AND ul.user_id IS NOT NULL THEN TRUE ELSE FALSE END AS liked
           FROM posts p
@@ -1363,6 +1366,7 @@ app.get('/api/posts/user/:userId', async (req, res) => {
             p.overlay_text,
             FALSE AS is_anonymous,
             p.created_at,
+            COALESCE(p.comment_count, 0)::int AS comment_count,
             COALESCE(l.like_count, 0)::int AS like_count,
             CASE WHEN ${viewerUserId}::int IS NOT NULL AND ul.user_id IS NOT NULL THEN TRUE ELSE FALSE END AS liked
           FROM posts p
@@ -1423,6 +1427,7 @@ app.get('/api/posts/detail', async (req, res) => {
             p.map_y,
             p.created_at,
             p.created_at + ${POST_TTL_INTERVAL}::interval AS expires_at,
+            COALESCE(p.comment_count, 0)::int AS comment_count,
             COALESCE(l.like_count, 0)::int AS like_count,
             CASE WHEN p.is_anonymous THEN 'Anonymous' ELSE u.name END AS username,
             CASE WHEN p.is_anonymous THEN NULL ELSE u.firebase_uid END AS owner_firebase_uid
@@ -1468,6 +1473,7 @@ app.get('/api/posts/detail', async (req, res) => {
             p.map_y,
             p.created_at,
             p.created_at + ${POST_TTL_INTERVAL}::interval AS expires_at,
+            COALESCE(p.comment_count, 0)::int AS comment_count,
             COALESCE(l.like_count, 0)::int AS like_count,
             u.name AS username,
             u.firebase_uid AS owner_firebase_uid
@@ -1821,6 +1827,9 @@ app.post('/api/posts/:id/comments', requireFirebaseAuth, async (req, res) => {
       }
     }
 
+    // Invalidate cached posts to reflect updated comment_count
+    await cacheDelPattern('posts:*')
+
     res.json({ success: true, comment: newComment })
   } catch (err) {
     console.error('POST /api/posts/:id/comments error:', err)
@@ -1899,6 +1908,9 @@ app.delete('/api/comments/:id', requireFirebaseAuth, async (req, res) => {
 
     // Hard delete the comment (cascade will handle replies)
     await sql`DELETE FROM comments WHERE id = ${commentId}`
+
+    // Invalidate cached posts to reflect updated comment_count
+    await cacheDelPattern('posts:*')
 
     res.json({ success: true })
   } catch (err) {
