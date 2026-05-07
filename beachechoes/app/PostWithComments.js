@@ -11,6 +11,8 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  LayoutAnimation,
+  UIManager,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -22,6 +24,11 @@ import { auth } from '../config/firebase';
 import PostImageWithOverlay from '../components/PostImageWithOverlay';
 import LikeButton from '../components/LikeButton';
 import { theme } from '../core/theme';
+
+// Enable LayoutAnimation on Android
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 function formatDateTime(ts) {
   if (!ts) return 'Unknown time';
@@ -55,6 +62,9 @@ export default function PostWithComments() {
   const [replyTo, setReplyTo] = useState(null); // { id, username }
   const [commentImage, setCommentImage] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // Track which parent comments have their replies expanded
+  const [expandedReplies, setExpandedReplies] = useState({});
 
   const flatListRef = useRef(null);
 
@@ -92,8 +102,10 @@ export default function PostWithComments() {
       
       if (data.success) {
         if (cursor) {
+          // Append paginated comments (they already have replies nested)
           setComments(prev => [...prev, ...data.comments]);
         } else {
+          // Initial load (comments already have replies nested)
           setComments(data.comments);
         }
         setNextCursor(data.nextCursor);
@@ -189,8 +201,24 @@ export default function PostWithComments() {
 
       const data = await res.json();
       if (data.success) {
-        // Add new comment to the top
-        setComments(prev => [data.comment, ...prev]);
+        // Add new comment or reply
+        if (replyTo) {
+          // It's a reply - add to parent comment's replies array
+          setComments(prev => prev.map(comment => {
+            if (comment.id === replyTo.id) {
+              return {
+                ...comment,
+                replies: [data.comment, ...(comment.replies || [])]
+              };
+            }
+            return comment;
+          }));
+          // Auto-expand the parent comment to show the new reply
+          setExpandedReplies(prev => ({ ...prev, [replyTo.id]: true }));
+        } else {
+          // It's a parent comment - add to top of comments list with empty replies array
+          setComments(prev => [{ ...data.comment, replies: [] }, ...prev]);
+        }
         setCommentText('');
         setReplyTo(null);
         setCommentImage(null);
@@ -225,7 +253,21 @@ export default function PostWithComments() {
               });
               const data = await res.json();
               if (data.success) {
-                setComments(prev => prev.filter(c => c.id !== commentId));
+                // Remove comment or reply from local state
+                setComments(prev => {
+                  // First, try to remove it as a parent comment
+                  const filtered = prev.filter(c => c.id !== commentId);
+                  
+                  // If it wasn't removed (meaning it's a reply), remove it from parent's replies
+                  if (filtered.length === prev.length) {
+                    return prev.map(comment => ({
+                      ...comment,
+                      replies: comment.replies?.filter(r => r.id !== commentId) || []
+                    }));
+                  }
+                  
+                  return filtered;
+                });
               } else {
                 Alert.alert('Error', data.error || 'Failed to delete comment');
               }
@@ -239,11 +281,21 @@ export default function PostWithComments() {
     );
   };
 
+  const toggleReplies = (commentId) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setExpandedReplies(prev => ({
+      ...prev,
+      [commentId]: !prev[commentId]
+    }));
+  };
+
   const renderCommentItem = ({ item }) => {
     const isOwner = user?.uid && item.firebase_uid === user.uid;
     const isReply = item.parent_comment_id !== null;
     const timeLabel = formatDateTime(item.created_at);
     const edited = item.edited_at ? ' (edited)' : '';
+    const hasReplies = item.replies && item.replies.length > 0;
+    const isExpanded = expandedReplies[item.id];
 
     return (
       <View style={[styles.commentCard, isReply && styles.replyCard]}>
@@ -290,6 +342,72 @@ export default function PostWithComments() {
             </TouchableOpacity>
           )}
         </View>
+
+        {/* Toggle button for replies */}
+        {hasReplies && (
+          <TouchableOpacity
+            onPress={() => toggleReplies(item.id)}
+            style={styles.toggleRepliesBtn}
+          >
+            <Text style={styles.toggleRepliesText}>
+              {isExpanded 
+                ? 'Hide replies' 
+                : `View ${item.replies.length} ${item.replies.length === 1 ? 'reply' : 'replies'}`
+              }
+            </Text>
+            <MaterialIcons 
+              name={isExpanded ? 'keyboard-arrow-up' : 'keyboard-arrow-down'} 
+              size={18} 
+              color="#3b82f6" 
+            />
+          </TouchableOpacity>
+        )}
+
+        {/* Render replies below parent comment */}
+        {hasReplies && isExpanded && item.replies.map((reply) => {
+          const replyIsOwner = user?.uid && reply.firebase_uid === user.uid;
+          const replyTimeLabel = formatDateTime(reply.created_at);
+          const replyEdited = reply.edited_at ? ' (edited)' : '';
+
+          return (
+            <View key={reply.id} style={styles.replyCard}>
+              <View style={styles.commentHeader}>
+                <TouchableOpacity
+                  onPress={() => reply.firebase_uid && router.push(`/profile/${reply.firebase_uid}`)}
+                  style={styles.commentAuthor}
+                >
+                  {reply.avatar_url ? (
+                    <Image source={{ uri: reply.avatar_url }} style={styles.avatar} />
+                  ) : (
+                    <View style={styles.avatarPlaceholder}>
+                      <MaterialIcons name="person" size={16} color="#64748b" />
+                    </View>
+                  )}
+                  <Text style={styles.username}>{reply.username || 'User'}</Text>
+                </TouchableOpacity>
+                <Text style={styles.timeText}>{replyTimeLabel}{replyEdited}</Text>
+              </View>
+
+              {reply.content && <Text style={styles.commentContent}>{reply.content}</Text>}
+              
+              {reply.image_url && (
+                <Image source={{ uri: reply.image_url }} style={styles.commentImage} />
+              )}
+
+              <View style={styles.commentActions}>
+                {replyIsOwner && (
+                  <TouchableOpacity
+                    onPress={() => handleDeleteComment(reply.id)}
+                    style={styles.actionBtn}
+                  >
+                    <MaterialIcons name="delete-outline" size={16} color="#e53935" />
+                    <Text style={[styles.actionText, { color: '#e53935' }]}>Delete</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+          );
+        })}
       </View>
     );
   };
@@ -549,7 +667,16 @@ const styles = StyleSheet.create({
   },
   replyCard: {
     marginLeft: 20,
+    marginTop: 8,
+    marginBottom: 0,
     backgroundColor: 'rgba(241,245,249,0.88)',
+    borderRadius: 12,
+    padding: 12,
+    elevation: 1,
+    shadowColor: '#111827',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.08,
+    shadowRadius: 3,
   },
   commentHeader: {
     flexDirection: 'row',
@@ -606,6 +733,18 @@ const styles = StyleSheet.create({
   actionText: {
     fontSize: 12,
     color: '#64748b',
+    fontWeight: '600',
+  },
+  toggleRepliesBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    paddingVertical: 4,
+    gap: 4,
+  },
+  toggleRepliesText: {
+    fontSize: 13,
+    color: '#3b82f6',
     fontWeight: '600',
   },
   loadingMore: {

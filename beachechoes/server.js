@@ -1654,7 +1654,7 @@ app.post('/api/posts/:id/report', requireFirebaseAuth, async (req, res) => {
 
 // -------------------- COMMENTS --------------------
 
-// GET /api/posts/:id/comments — Fetch paginated comments and replies
+// GET /api/posts/:id/comments — Fetch paginated comments and replies (nested structure)
 app.get('/api/posts/:id/comments', async (req, res) => {
   try {
     const postId = parseInt(req.params.id, 10)
@@ -1663,50 +1663,78 @@ app.get('/api/posts/:id/comments', async (req, res) => {
     }
 
     const cursor = req.query.cursor ? parseInt(req.query.cursor, 10) : null
-    const limit = 20 // Comments per page
+    const limit = 20 // Parent comments per page
 
     // Get viewer's user ID for filtering muted users
     const viewerUserId = await resolveViewerUserId(req)
     const mutedUserIds = viewerUserId ? await getMutedUserIds(viewerUserId) : []
 
-    // Fetch comments and replies in one query, ordered by created_at
-    // Parent comments first, then replies grouped by parent
-    let comments
+    // Fetch parent comments (no parent_comment_id)
+    let parentComments
     if (cursor) {
-      comments = await sql`
+      parentComments = await sql`
         SELECT 
           c.id, c.post_id, c.parent_comment_id, c.user_id, c.content, c.image_url,
-          c.created_at, c.edited_at,
+          c.created_at, c.edited_at, c.like_count,
           u.firebase_uid, u.name AS username, u.avatar_url
         FROM comments c
         LEFT JOIN users u ON c.user_id = u.user_id
         WHERE c.post_id = ${postId}
           AND c.is_deleted = FALSE
+          AND c.parent_comment_id IS NULL
           AND c.id < ${cursor}
           ${mutedUserIds.length > 0 ? sql`AND c.user_id NOT IN ${sql(mutedUserIds)}` : sql``}
         ORDER BY c.created_at DESC
         LIMIT ${limit}
       `
     } else {
-      comments = await sql`
+      parentComments = await sql`
         SELECT 
           c.id, c.post_id, c.parent_comment_id, c.user_id, c.content, c.image_url,
-          c.created_at, c.edited_at,
+          c.created_at, c.edited_at, c.like_count,
           u.firebase_uid, u.name AS username, u.avatar_url
         FROM comments c
         LEFT JOIN users u ON c.user_id = u.user_id
         WHERE c.post_id = ${postId}
           AND c.is_deleted = FALSE
+          AND c.parent_comment_id IS NULL
           ${mutedUserIds.length > 0 ? sql`AND c.user_id NOT IN ${sql(mutedUserIds)}` : sql``}
         ORDER BY c.created_at DESC
         LIMIT ${limit}
       `
     }
 
-    const hasMore = comments.length === limit
-    const nextCursor = hasMore ? comments[comments.length - 1].id : null
+    // Fetch all replies for these parent comments
+    const parentIds = parentComments.map(c => c.id)
+    let replies = []
+    if (parentIds.length > 0) {
+      replies = await sql`
+        SELECT 
+          c.id, c.post_id, c.parent_comment_id, c.user_id, c.content, c.image_url,
+          c.created_at, c.edited_at, c.like_count,
+          u.firebase_uid, u.name AS username, u.avatar_url
+        FROM comments c
+        LEFT JOIN users u ON c.user_id = u.user_id
+        WHERE c.parent_comment_id IN ${sql(parentIds)}
+          AND c.is_deleted = FALSE
+          ${mutedUserIds.length > 0 ? sql`AND c.user_id NOT IN ${sql(mutedUserIds)}` : sql``}
+        ORDER BY c.like_count DESC, c.created_at DESC
+      `
+    }
 
-    res.json({ success: true, comments, nextCursor, hasMore })
+    // Group replies under parent comments
+    const commentsWithReplies = parentComments.map(parent => {
+      const parentReplies = replies.filter(r => r.parent_comment_id === parent.id)
+      return {
+        ...parent,
+        replies: parentReplies
+      }
+    })
+
+    const hasMore = parentComments.length === limit
+    const nextCursor = hasMore ? parentComments[parentComments.length - 1].id : null
+
+    res.json({ success: true, comments: commentsWithReplies, nextCursor, hasMore })
   } catch (err) {
     console.error('GET /api/posts/:id/comments error:', err)
     res.status(500).json({ success: false, error: 'Internal server error' })
