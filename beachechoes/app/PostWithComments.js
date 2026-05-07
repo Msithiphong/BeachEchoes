@@ -23,6 +23,8 @@ import { API_BASE } from '../config/api';
 import { auth } from '../config/firebase';
 import PostImageWithOverlay from '../components/PostImageWithOverlay';
 import LikeButton from '../components/LikeButton';
+import ReportPostModal from '../components/ReportPostModal';
+import DeletePostModal from '../components/DeletePostModal';
 import { theme } from '../core/theme';
 
 // Enable LayoutAnimation on Android
@@ -62,6 +64,9 @@ export default function PostWithComments() {
   const [replyTo, setReplyTo] = useState(null); // { id, username }
   const [commentImage, setCommentImage] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+
+  const [reportTarget, setReportTarget] = useState(null);
+  const [deleteTarget, setDeleteTarget] = useState(null);
 
   // Track which parent comments have their replies expanded
   const [expandedReplies, setExpandedReplies] = useState({});
@@ -128,6 +133,15 @@ export default function PostWithComments() {
     if (!loadingMore && hasMore && nextCursor) {
       fetchComments(nextCursor);
     }
+  };
+
+  const handleDeleted = (postId) => {
+    Alert.alert('Post Deleted', 'This post has been deleted.', [
+      {
+        text: 'OK',
+        onPress: () => router.back(),
+      },
+    ]);
   };
 
   const handlePickImage = async () => {
@@ -449,6 +463,16 @@ export default function PostWithComments() {
             initialCount={post.like_count ?? 0}
             initialLiked={false}
           />
+          <View style={styles.footerActions}>
+            <TouchableOpacity onPress={() => setReportTarget(post.id)} style={styles.iconBtn}>
+              <MaterialIcons name="flag" size={20} color="#888" />
+            </TouchableOpacity>
+            {user?.uid && post.owner_firebase_uid === user.uid && (
+              <TouchableOpacity onPress={() => setDeleteTarget(post.id)} style={styles.iconBtn}>
+                <MaterialIcons name="delete-outline" size={20} color="#e53935" />
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
         <View style={styles.commentsHeaderDivider}>
           <Text style={styles.commentsHeaderText}>
@@ -563,6 +587,21 @@ export default function PostWithComments() {
           </>
         )}
       </KeyboardAvoidingView>
+
+      <ReportPostModal
+        visible={reportTarget !== null}
+        postId={reportTarget}
+        onClose={() => setReportTarget(null)}
+      />
+      <DeletePostModal
+        visible={deleteTarget !== null}
+        postId={deleteTarget}
+        onClose={() => setDeleteTarget(null)}
+        onDeleted={() => {
+          handleDeleted(deleteTarget);
+          setDeleteTarget(null);
+        }}
+      />
     </LinearGradient>
   );
 }
@@ -635,6 +674,17 @@ const styles = StyleSheet.create({
   cardFooter: {
     paddingHorizontal: 14,
     paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  footerActions: {
+    flexDirection: 'row',
+    gap: 12,
+    alignItems: 'center',
+  },
+  iconBtn: {
+    padding: 4,
   },
   commentsHeaderDivider: {
     borderTopWidth: 1,

@@ -385,6 +385,7 @@ export default function UserProfile() {
                 onLikeToggle={handleLikeToggle}
                 commentCount={post.comment_count || 0}
                 onCommentPress={(postId) => router.push(`/PostWithComments?postId=${postId}`)}
+                onImagePress={(postId) => router.push(`/PostDetail?ids=${postId}`)}
               >
                 {post.overlay_text}
               </ImageCard>

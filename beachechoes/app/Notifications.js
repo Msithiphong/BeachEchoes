@@ -86,7 +86,7 @@ export default function Notifications() {
       // For now, we'll handle friend requests inline
     } else if (notification.type === 'post_liked') {
       // Navigate to the post detail or user profile
-      router.push(`/PostDetail?ids=${notification.data.post_id}`)
+      router.push(`/PostWithComments?postId=${notification.data.post_id}`)
     } else if (notification.type === 'post_expired') {
       // Just mark as read, no navigation
     } else if (notification.type === 'new_follower') {

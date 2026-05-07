@@ -159,6 +159,7 @@ export default function Dashboard() {
                   onLikeToggle={handleLikeToggle}
                   commentCount={post.comment_count || 0}
                   onCommentPress={(postId) => router.push(`/PostWithComments?postId=${postId}`)}
+                  onImagePress={(postId) => router.push(`/PostWithComments?postId=${postId}`)}
                 >
                   {post.overlay_text}
                 </ImageCard>

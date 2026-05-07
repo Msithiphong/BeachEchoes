@@ -19,6 +19,7 @@ export default function ImageCard({
   onLikeToggle,
   commentCount = 0,
   onCommentPress,
+  onImagePress,
   style 
 }) {
   const [liked, setLiked] = useState(initialLiked)
@@ -26,6 +27,7 @@ export default function ImageCard({
   const [pending, setPending] = useState(false)
   const heartScale = useRef(new Animated.Value(0)).current
   const lastTap = useRef(0)
+  const singleTapTimer = useRef(null)
 
   // Sync with prop changes (when parent updates state)
   useEffect(() => {
@@ -36,12 +38,41 @@ export default function ImageCard({
     setLikes(likeCount)
   }, [likeCount])
 
+  // Cleanup single tap timer on unmount
+  useEffect(() => {
+    return () => {
+      if (singleTapTimer.current) {
+        clearTimeout(singleTapTimer.current)
+      }
+    }
+  }, [])
+
   const handleDoubleTap = () => {
     const now = Date.now()
-    if (now - lastTap.current < 300) {
-      triggerLike()
+    const DOUBLE_TAP_DELAY = 300
+    const SINGLE_TAP_DELAY = 200
+
+    // Clear any pending single tap navigation
+    if (singleTapTimer.current) {
+      clearTimeout(singleTapTimer.current)
+      singleTapTimer.current = null
     }
-    lastTap.current = now
+
+    // Check if this is a double tap
+    if (now - lastTap.current < DOUBLE_TAP_DELAY) {
+      // Double tap - trigger like
+      triggerLike()
+      lastTap.current = 0 // Reset to prevent triple-tap issues
+    } else {
+      // Single tap - schedule navigation after debounce delay
+      lastTap.current = now
+      if (onImagePress && postId) {
+        singleTapTimer.current = setTimeout(() => {
+          onImagePress(postId)
+          singleTapTimer.current = null
+        }, SINGLE_TAP_DELAY)
+      }
+    }
   }
 
   const triggerLike = async () => {
