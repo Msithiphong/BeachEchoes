@@ -6,6 +6,7 @@ import admin from 'firebase-admin'
 import { createRequire } from 'module'
 import { VALID_CAMPUS_POLYGON } from './config/campusMap.js'
 import { DEFAULT_POST_CATEGORY, isValidPostCategory } from './config/postCategories.js'
+import { initRedis, cacheGet, cacheSet, cacheDel, cacheDelPattern, CacheKeys, CacheTTL } from './helpers/redisClient.js'
 
 const require = createRequire(import.meta.url)
 const leoProfanity = require('leo-profanity')
@@ -244,6 +245,13 @@ app.get('/api/profile/:userId', async (req, res) => {
   try {
     const { userId } = req.params // This is firebase_uid
 
+    // Check cache first
+    const cacheKey = CacheKeys.profile(userId)
+    const cachedProfile = await cacheGet(cacheKey)
+    if (cachedProfile) {
+      return res.json({ success: true, profile: cachedProfile })
+    }
+
     const result = await sql`
       SELECT user_id AS id, firebase_uid, name, bio, avatar_url
       FROM users
@@ -255,6 +263,7 @@ app.get('/api/profile/:userId', async (req, res) => {
     }
 
     const profile = result[0]
+
     const neonId = profile.id
 
     // Echoes = total posts by this user (excluding deleted)
@@ -277,6 +286,9 @@ app.get('/api/profile/:userId', async (req, res) => {
     profile.echoes_count = echoesResult[0]?.count ?? 0
     profile.following_count = followingResult[0]?.count ?? 0
     profile.followers_count = followersResult[0]?.count ?? 0
+
+    // Cache the profile for 15 minutes
+    await cacheSet(cacheKey, profile, CacheTTL.PROFILE)
 
     res.json({ success: true, profile })
   } catch (error) {
@@ -305,6 +317,10 @@ app.put('/api/profile/:userId', requireFirebaseAuth, async (req, res) => {
       WHERE firebase_uid = ${authedUid}
       RETURNING user_id AS id, firebase_uid, name, bio, avatar_url
     `
+
+    // Invalidate profile cache after update
+    const cacheKey = CacheKeys.profile(authedUid)
+    await cacheDel(cacheKey)
 
     res.json({ success: true, profile: result[0] })
   } catch (error) {
@@ -1063,6 +1079,14 @@ app.post('/api/posts', requireFirebaseAuth, async (req, res) => {
             created_at + ${POST_TTL_INTERVAL}::interval AS expires_at
         `
 
+    // Invalidate all post-related caches after creating a new post
+    await cacheDelPattern('posts:*')
+    // Also invalidate the creator's profile cache (post count changed)
+    const userProfile = await sql`SELECT firebase_uid FROM users WHERE user_id = ${userId}`
+    if (userProfile.length > 0) {
+      await cacheDel(CacheKeys.profile(userProfile[0].firebase_uid))
+    }
+
     res.status(201).json({ success: true, post: result[0] })
   } catch (err) {
     if (err?.code === '42703' && String(err?.message || '').includes('is_anonymous')) {
@@ -1094,6 +1118,22 @@ app.get('/api/posts/map', async (req, res) => {
 
     const viewerUserId = await resolveViewerUserId(req)
 
+    // Check cache first (cache key includes category for filtering)
+    const cacheKey = CacheKeys.postsMap(rawCategory || 'all')
+    const cachedPosts = await cacheGet(cacheKey)
+    if (cachedPosts && !showMutedOnly) {
+      // Filter out muted users on cached data if viewer is authenticated
+      let filteredPosts = cachedPosts
+      if (viewerUserId) {
+        const mutedUsers = await sql`
+          SELECT muted_user_id FROM user_mutes WHERE muter_user_id = ${viewerUserId}::int
+        `
+        const mutedIds = new Set(mutedUsers.map(u => u.muted_user_id))
+        filteredPosts = cachedPosts.filter(p => !mutedIds.has(p.user_id))
+      }
+      return res.json({ success: true, posts: filteredPosts })
+    }
+
     let rows
     if (showMutedOnly) {
       if (!viewerUserId) {
@@ -1116,23 +1156,27 @@ app.get('/api/posts/map', async (req, res) => {
       }
     } else {
       rows = await sql`
-        SELECT p.id, p.map_x, p.map_y
+        SELECT p.id, p.map_x, p.map_y, p.user_id
         FROM posts p
         WHERE p.is_deleted = FALSE
           AND p.created_at >= NOW() - ${POST_TTL_INTERVAL}::interval
           AND p.map_x IS NOT NULL
           AND p.map_y IS NOT NULL
           AND (${!shouldFilterCategory} OR p.category = ${rawCategory})
-          AND (
-            ${viewerUserId}::int IS NULL
-            OR p.user_id NOT IN (
-              SELECT muted_user_id
-              FROM user_mutes
-              WHERE muter_user_id = ${viewerUserId}::int
-            )
-          )
         ORDER BY p.created_at DESC
       `
+      
+      // Cache the raw posts (without muting filter) for 5 minutes
+      await cacheSet(cacheKey, rows, CacheTTL.POSTS_MAP)
+      
+      // Filter muted users from results
+      if (viewerUserId) {
+        const mutedUsers = await sql`
+          SELECT muted_user_id FROM user_mutes WHERE muter_user_id = ${viewerUserId}::int
+        `
+        const mutedIds = new Set(mutedUsers.map(u => u.muted_user_id))
+        rows = rows.filter(p => !mutedIds.has(p.user_id))
+      }
     }
     res.json({ success: true, posts: rows })
   } catch (err) {
@@ -1254,6 +1298,18 @@ app.get('/api/posts/user/:userId', async (req, res) => {
 
     const viewerUserId = await resolveViewerUserId(req)
 
+    // Check cache first (only cache for non-authenticated or when viewer is not viewing their own posts)
+    // This ensures live updates for own profile while caching other users' profiles
+    const shouldCache = !viewerUserId || viewerUserId !== userId
+    const cacheKey = CacheKeys.postsUser(userId)
+    
+    if (shouldCache) {
+      const cachedPosts = await cacheGet(cacheKey)
+      if (cachedPosts) {
+        return res.json({ success: true, posts: cachedPosts })
+      }
+    }
+
     const hasAnonymousColumn = await ensurePostsAnonymousColumnKnown()
     const rows = hasAnonymousColumn
       ? await sql`
@@ -1312,6 +1368,11 @@ app.get('/api/posts/user/:userId', async (req, res) => {
             )
           ORDER BY p.created_at DESC
         `
+
+    // Cache for 10 minutes if applicable
+    if (shouldCache) {
+      await cacheSet(cacheKey, rows, CacheTTL.POSTS_USER)
+    }
 
     res.json({ success: true, posts: rows })
   } catch (err) {
@@ -1448,6 +1509,14 @@ app.delete('/api/posts/:id', requireFirebaseAuth, async (req, res) => {
       RETURNING id
     `
     if (!result.length) return res.status(404).json({ success: false, error: 'Post not found or not yours' })
+
+    // Invalidate all post-related caches after deleting a post
+    await cacheDelPattern('posts:*')
+    // Also invalidate the user's profile cache (post count changed)
+    const userProfile = await sql`SELECT firebase_uid FROM users WHERE user_id = ${userId}`
+    if (userProfile.length > 0) {
+      await cacheDel(CacheKeys.profile(userProfile[0].firebase_uid))
+    }
 
     res.json({ success: true })
   } catch (err) {
@@ -1593,6 +1662,10 @@ setInterval(() => {
 
 app.listen(3000, async () => {
   console.log('Server running on http://localhost:3000')
+  
+  // Initialize Redis (non-blocking, server continues without caching if fails)
+  await initRedis()
+  
   try {
     const dbSummary = getDatabaseUrlSummary()
     const currentDb = await sql`SELECT current_database() AS current_database`

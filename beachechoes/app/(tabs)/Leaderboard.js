@@ -193,7 +193,7 @@ export default function Leaderboard() {
             </View>
           </Surface>
 
-          <Text style={styles.sectionTitle}>
+          <Text style={[styles.sectionTitle, styles.centeredText]}>
             {view === 'users' ? 'Leaderboard Users' : 'Leaderboard Posts'}
           </Text>
 
@@ -238,7 +238,9 @@ export default function Leaderboard() {
               )
             })}
 
-            {!listRows.length && !loading && <Text style={styles.empty}>No results yet</Text>}
+            {!listRows.length && !loading && (
+              <Text style={[styles.empty, styles.centeredText]}>No results yet</Text>
+            )}
           </View>
         </ScrollView>
       </View>
@@ -314,8 +316,8 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     backgroundColor: 'rgba(0,0,0,0.35)',
     marginBottom: 10,
-    marginLeft: -6,
-    marginRight: -6,
+    marginLeft: 0,
+    marginRight: 0,
   },
   refreshBtn: {
     width: 120,
@@ -523,5 +525,10 @@ const styles = StyleSheet.create({
   error: {
     color: '#000',
     marginBottom: 10,
+  },
+
+  centeredText: {
+    textAlign: 'center',
+    alignSelf: 'center',
   },
 })
