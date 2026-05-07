@@ -98,6 +98,15 @@ export default function PostDetail() {
             initialLiked={false}
           />
           <View style={styles.footerActions}>
+            <TouchableOpacity
+              onPress={() => router.push(`/PostWithComments?postId=${item.id}`)}
+              style={styles.iconBtn}
+            >
+              <MaterialIcons name="comment" size={20} color="#888" />
+              {item.comment_count > 0 && (
+                <Text style={styles.commentCount}>{item.comment_count}</Text>
+              )}
+            </TouchableOpacity>
             <TouchableOpacity onPress={() => setReportTarget(item.id)} style={styles.iconBtn}>
               <MaterialIcons name="flag" size={20} color="#888" />
             </TouchableOpacity>
@@ -253,5 +262,19 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   footerActions: { flexDirection: 'row', gap: 8 },
-  iconBtn: { padding: 4 },
+  iconBtn: { padding: 4, position: 'relative' },
+  commentCount: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: '#3b82f6',
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '700',
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    borderRadius: 8,
+    minWidth: 16,
+    textAlign: 'center',
+  },
 });

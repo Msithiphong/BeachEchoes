@@ -350,13 +350,29 @@ async function resolveViewerUserId(req) {
   }
 }
 
+// Helper to get list of muted user IDs for a viewer
+async function getMutedUserIds(viewerUserId) {
+  if (!viewerUserId) return []
+  try {
+    const mutedUsers = await sql`
+      SELECT muted_user_id FROM user_mutes WHERE muter_user_id = ${viewerUserId}::int
+    `
+    return mutedUsers.map(u => u.muted_user_id)
+  } catch (err) {
+    console.error('getMutedUserIds error:', err)
+    return []
+  }
+}
+
 // -------------------- NOTIFICATIONS --------------------
 
 // Notification types (extensible for future use)
 const NOTIFICATION_TYPES = {
   POST_LIKED: 'post_liked',
   POST_EXPIRED: 'post_expired',
-  NEW_FOLLOWER: 'new_follower'
+  NEW_FOLLOWER: 'new_follower',
+  COMMENT_ON_POST: 'comment_on_post',
+  COMMENT_REPLY: 'comment_reply'
 }
 
 const MAX_NOTIFICATIONS_PER_USER = 15
@@ -1629,6 +1645,269 @@ app.post('/api/posts/:id/report', requireFirebaseAuth, async (req, res) => {
     res.status(500).json({ success: false, error: 'Internal server error' })
   }
 })
+
+// -------------------- COMMENTS --------------------
+
+// GET /api/posts/:id/comments — Fetch paginated comments and replies
+app.get('/api/posts/:id/comments', async (req, res) => {
+  try {
+    const postId = parseInt(req.params.id, 10)
+    if (isNaN(postId)) {
+      return res.status(400).json({ success: false, error: 'Invalid post ID' })
+    }
+
+    const cursor = req.query.cursor ? parseInt(req.query.cursor, 10) : null
+    const limit = 20 // Comments per page
+
+    // Get viewer's user ID for filtering muted users
+    const viewerUserId = await resolveViewerUserId(req)
+    const mutedUserIds = viewerUserId ? await getMutedUserIds(viewerUserId) : []
+
+    // Fetch comments and replies in one query, ordered by created_at
+    // Parent comments first, then replies grouped by parent
+    let comments
+    if (cursor) {
+      comments = await sql`
+        SELECT 
+          c.id, c.post_id, c.parent_comment_id, c.user_id, c.content, c.image_url,
+          c.created_at, c.edited_at,
+          u.firebase_uid, u.name AS username, u.avatar_url
+        FROM comments c
+        LEFT JOIN users u ON c.user_id = u.user_id
+        WHERE c.post_id = ${postId}
+          AND c.is_deleted = FALSE
+          AND c.id < ${cursor}
+          ${mutedUserIds.length > 0 ? sql`AND c.user_id NOT IN ${sql(mutedUserIds)}` : sql``}
+        ORDER BY c.created_at DESC
+        LIMIT ${limit}
+      `
+    } else {
+      comments = await sql`
+        SELECT 
+          c.id, c.post_id, c.parent_comment_id, c.user_id, c.content, c.image_url,
+          c.created_at, c.edited_at,
+          u.firebase_uid, u.name AS username, u.avatar_url
+        FROM comments c
+        LEFT JOIN users u ON c.user_id = u.user_id
+        WHERE c.post_id = ${postId}
+          AND c.is_deleted = FALSE
+          ${mutedUserIds.length > 0 ? sql`AND c.user_id NOT IN ${sql(mutedUserIds)}` : sql``}
+        ORDER BY c.created_at DESC
+        LIMIT ${limit}
+      `
+    }
+
+    const hasMore = comments.length === limit
+    const nextCursor = hasMore ? comments[comments.length - 1].id : null
+
+    res.json({ success: true, comments, nextCursor, hasMore })
+  } catch (err) {
+    console.error('GET /api/posts/:id/comments error:', err)
+    res.status(500).json({ success: false, error: 'Internal server error' })
+  }
+})
+
+// POST /api/posts/:id/comments — Add a comment or reply
+app.post('/api/posts/:id/comments', requireFirebaseAuth, async (req, res) => {
+  try {
+    const postId = parseInt(req.params.id, 10)
+    if (isNaN(postId)) {
+      return res.status(400).json({ success: false, error: 'Invalid post ID' })
+    }
+
+    const userId = await resolveUserId(req.firebase.uid)
+    if (!userId) {
+      return res.status(404).json({ success: false, error: 'User not found' })
+    }
+
+    const { content, imageBase64, parentCommentId } = req.body
+
+    // Validate: at least one of content or image must be present
+    const hasContent = content && String(content).trim()
+    const hasImage = imageBase64 && String(imageBase64).trim()
+
+    if (!hasContent && !hasImage) {
+      return res.status(400).json({ success: false, error: 'Comment must have content or image' })
+    }
+
+    // Sanitize content if present
+    const cleanedContent = hasContent ? sanitizeMessage(String(content).trim()) : null
+
+    // Upload image if present
+    let imageUrl = null
+    if (hasImage) {
+      const imageBuffer = Buffer.from(imageBase64, 'base64')
+      const fileName = `comments/${userId}_${Date.now()}.jpg`
+      const file = bucket.file(fileName)
+      await file.save(imageBuffer, {
+        metadata: { contentType: 'image/jpeg' },
+        public: true,
+      })
+      imageUrl = `https://storage.googleapis.com/${bucket.name}/${fileName}`
+    }
+
+    // Validate parent comment exists if provided
+    if (parentCommentId) {
+      const parentId = parseInt(parentCommentId, 10)
+      if (isNaN(parentId)) {
+        return res.status(400).json({ success: false, error: 'Invalid parent comment ID' })
+      }
+      const parentComment = await sql`
+        SELECT id, post_id FROM comments WHERE id = ${parentId} AND is_deleted = FALSE
+      `
+      if (!parentComment.length) {
+        return res.status(404).json({ success: false, error: 'Parent comment not found' })
+      }
+      if (parentComment[0].post_id !== postId) {
+        return res.status(400).json({ success: false, error: 'Parent comment does not belong to this post' })
+      }
+    }
+
+    // Insert comment
+    const result = await sql`
+      INSERT INTO comments (post_id, parent_comment_id, user_id, content, image_url, created_at, updated_at)
+      VALUES (
+        ${postId}, 
+        ${parentCommentId ? parseInt(parentCommentId, 10) : null}, 
+        ${userId}, 
+        ${cleanedContent}, 
+        ${imageUrl}, 
+        NOW(), 
+        NOW()
+      )
+      RETURNING id, post_id, parent_comment_id, user_id, content, image_url, created_at, edited_at
+    `
+
+    const newComment = result[0]
+
+    // Get commenter info
+    const userInfo = await sql`
+      SELECT firebase_uid, name AS username, avatar_url FROM users WHERE user_id = ${userId}
+    `
+    if (userInfo.length) {
+      Object.assign(newComment, userInfo[0])
+    }
+
+    // Send notification to post owner (unless commenting on own post)
+    const postOwner = await sql`SELECT user_id FROM posts WHERE id = ${postId}`
+    if (postOwner.length && postOwner[0].user_id !== userId && !parentCommentId) {
+      await createNotification(postOwner[0].user_id, NOTIFICATION_TYPES.COMMENT_ON_POST, {
+        post_id: postId,
+        comment_id: newComment.id,
+        from_user_id: userId,
+        from_firebase_uid: req.firebase.uid,
+        from_user_name: userInfo[0]?.username || 'Someone',
+        from_avatar_url: userInfo[0]?.avatar_url || null,
+        content_preview: cleanedContent ? cleanedContent.substring(0, 50) : '[Photo]'
+      }, userId)
+    }
+
+    // Send notification to parent comment author (if replying)
+    if (parentCommentId) {
+      const parentComment = await sql`
+        SELECT user_id FROM comments WHERE id = ${parseInt(parentCommentId, 10)}
+      `
+      if (parentComment.length && parentComment[0].user_id !== userId) {
+        await createNotification(parentComment[0].user_id, NOTIFICATION_TYPES.COMMENT_REPLY, {
+          post_id: postId,
+          comment_id: newComment.id,
+          parent_comment_id: parseInt(parentCommentId, 10),
+          from_user_id: userId,
+          from_firebase_uid: req.firebase.uid,
+          from_user_name: userInfo[0]?.username || 'Someone',
+          from_avatar_url: userInfo[0]?.avatar_url || null,
+          content_preview: cleanedContent ? cleanedContent.substring(0, 50) : '[Photo]'
+        }, userId)
+      }
+    }
+
+    res.json({ success: true, comment: newComment })
+  } catch (err) {
+    console.error('POST /api/posts/:id/comments error:', err)
+    res.status(500).json({ success: false, error: 'Internal server error' })
+  }
+})
+
+// PUT /api/comments/:id — Edit own comment
+app.put('/api/comments/:id', requireFirebaseAuth, async (req, res) => {
+  try {
+    const commentId = parseInt(req.params.id, 10)
+    if (isNaN(commentId)) {
+      return res.status(400).json({ success: false, error: 'Invalid comment ID' })
+    }
+
+    const userId = await resolveUserId(req.firebase.uid)
+    if (!userId) {
+      return res.status(404).json({ success: false, error: 'User not found' })
+    }
+
+    const { content } = req.body
+    if (!content || !String(content).trim()) {
+      return res.status(400).json({ success: false, error: 'Content is required' })
+    }
+
+    // Verify ownership
+    const comment = await sql`
+      SELECT id, user_id FROM comments WHERE id = ${commentId} AND is_deleted = FALSE
+    `
+    if (!comment.length) {
+      return res.status(404).json({ success: false, error: 'Comment not found' })
+    }
+    if (comment[0].user_id !== userId) {
+      return res.status(403).json({ success: false, error: 'Forbidden' })
+    }
+
+    // Update comment
+    const cleanedContent = sanitizeMessage(String(content).trim())
+    const result = await sql`
+      UPDATE comments
+      SET content = ${cleanedContent}, updated_at = NOW(), edited_at = NOW()
+      WHERE id = ${commentId}
+      RETURNING id, post_id, parent_comment_id, user_id, content, image_url, created_at, edited_at
+    `
+
+    res.json({ success: true, comment: result[0] })
+  } catch (err) {
+    console.error('PUT /api/comments/:id error:', err)
+    res.status(500).json({ success: false, error: 'Internal server error' })
+  }
+})
+
+// DELETE /api/comments/:id — Delete own comment (hard delete)
+app.delete('/api/comments/:id', requireFirebaseAuth, async (req, res) => {
+  try {
+    const commentId = parseInt(req.params.id, 10)
+    if (isNaN(commentId)) {
+      return res.status(400).json({ success: false, error: 'Invalid comment ID' })
+    }
+
+    const userId = await resolveUserId(req.firebase.uid)
+    if (!userId) {
+      return res.status(404).json({ success: false, error: 'User not found' })
+    }
+
+    // Verify ownership
+    const comment = await sql`
+      SELECT id, user_id FROM comments WHERE id = ${commentId} AND is_deleted = FALSE
+    `
+    if (!comment.length) {
+      return res.status(404).json({ success: false, error: 'Comment not found' })
+    }
+    if (comment[0].user_id !== userId) {
+      return res.status(403).json({ success: false, error: 'Forbidden' })
+    }
+
+    // Hard delete the comment (cascade will handle replies)
+    await sql`DELETE FROM comments WHERE id = ${commentId}`
+
+    res.json({ success: true })
+  } catch (err) {
+    console.error('DELETE /api/comments/:id error:', err)
+    res.status(500).json({ success: false, error: 'Internal server error' })
+  }
+})
+
+// -------------------- END COMMENTS --------------------
 
 // -------------------- END POSTS --------------------
 

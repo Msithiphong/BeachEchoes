@@ -94,6 +94,9 @@ export default function Notifications() {
       if (notification.data.from_firebase_uid) {
         router.push(`/profile/${notification.data.from_firebase_uid}`)
       }
+    } else if (notification.type === 'comment_on_post' || notification.type === 'comment_reply') {
+      // Navigate to the post with comments
+      router.push(`/PostWithComments?postId=${notification.data.post_id}`)
     }
   }
 
@@ -182,11 +185,71 @@ export default function Notifications() {
       )
     }
 
+    if (item.type === 'comment_on_post') {
+      return (
+        <TouchableOpacity
+          style={[styles.card, isUnread && styles.unreadCard]}
+          onPress={() => handleNotificationPress(item)}
+        >
+          <View style={styles.userInfo}>
+            <Image
+              source={{
+                uri:
+                  item.data.from_avatar_url ||
+                  'https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png',
+              }}
+              style={styles.avatar}
+            />
+            <View style={styles.nameContainer}>
+              <Text style={styles.userName}>{item.data.from_user_name}</Text>
+              <Text style={styles.subtitle}>
+                Commented on your post: "{item.data.content_preview}"
+              </Text>
+              <Text style={styles.timeText}>
+                {new Date(item.created_at).toLocaleDateString()}
+              </Text>
+            </View>
+          </View>
+          {isUnread && <View style={styles.unreadDot} />}
+        </TouchableOpacity>
+      )
+    }
+
+    if (item.type === 'comment_reply') {
+      return (
+        <TouchableOpacity
+          style={[styles.card, isUnread && styles.unreadCard]}
+          onPress={() => handleNotificationPress(item)}
+        >
+          <View style={styles.userInfo}>
+            <Image
+              source={{
+                uri:
+                  item.data.from_avatar_url ||
+                  'https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png',
+              }}
+              style={styles.avatar}
+            />
+            <View style={styles.nameContainer}>
+              <Text style={styles.userName}>{item.data.from_user_name}</Text>
+              <Text style={styles.subtitle}>
+                Replied to your comment: "{item.data.content_preview}"
+              </Text>
+              <Text style={styles.timeText}>
+                {new Date(item.created_at).toLocaleDateString()}
+              </Text>
+            </View>
+          </View>
+          {isUnread && <View style={styles.unreadDot} />}
+        </TouchableOpacity>
+      )
+    }
+
     return null
   }
 
   // Only count unread notifications of supported types
-  const unreadCount = notifications.filter((n) => ['new_follower', 'post_liked', 'post_expired'].includes(n.type) && !n.read).length
+  const unreadCount = notifications.filter((n) => ['new_follower', 'post_liked', 'post_expired', 'comment_on_post', 'comment_reply'].includes(n.type) && !n.read).length
 
   return (
     <Background>
@@ -196,13 +259,13 @@ export default function Notifications() {
 
       {loading ? (
         <ActivityIndicator size="large" color={theme.colors.primary} />
-      ) : notifications.filter((n) => ['new_follower', 'post_liked', 'post_expired'].includes(n.type)).length === 0 ? (
+      ) : notifications.filter((n) => ['new_follower', 'post_liked', 'post_expired', 'comment_on_post', 'comment_reply'].includes(n.type)).length === 0 ? (
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyText}>No notifications</Text>
         </View>
       ) : (
         <FlatList
-          data={notifications.filter((n) => ['new_follower', 'post_liked', 'post_expired'].includes(n.type))}
+          data={notifications.filter((n) => ['new_follower', 'post_liked', 'post_expired', 'comment_on_post', 'comment_reply'].includes(n.type))}
           keyExtractor={(item) => item.id.toString()}
           renderItem={renderNotification}
           style={styles.list}
