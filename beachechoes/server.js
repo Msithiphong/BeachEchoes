@@ -1672,54 +1672,101 @@ app.get('/api/posts/:id/comments', async (req, res) => {
     // Fetch parent comments (no parent_comment_id)
     let parentComments
     if (cursor) {
-      parentComments = await sql`
-        SELECT 
-          c.id, c.post_id, c.parent_comment_id, c.user_id, c.content, c.image_url,
-          c.created_at, c.edited_at, c.like_count,
-          u.firebase_uid, u.name AS username, u.avatar_url
-        FROM comments c
-        LEFT JOIN users u ON c.user_id = u.user_id
-        WHERE c.post_id = ${postId}
-          AND c.is_deleted = FALSE
-          AND c.parent_comment_id IS NULL
-          AND c.id < ${cursor}
-          ${mutedUserIds.length > 0 ? sql`AND c.user_id NOT IN ${sql(mutedUserIds)}` : sql``}
-        ORDER BY c.created_at DESC
-        LIMIT ${limit}
-      `
+      if (mutedUserIds.length > 0) {
+        parentComments = await sql`
+          SELECT 
+            c.id, c.post_id, c.parent_comment_id, c.user_id, c.content, c.image_url,
+            c.created_at, c.edited_at, c.like_count,
+            u.firebase_uid, u.name AS username, u.avatar_url
+          FROM comments c
+          LEFT JOIN users u ON c.user_id = u.user_id
+          WHERE c.post_id = ${postId}
+            AND c.is_deleted = FALSE
+            AND c.parent_comment_id IS NULL
+            AND c.id < ${cursor}
+            AND c.user_id != ALL(${mutedUserIds})
+          ORDER BY c.created_at DESC
+          LIMIT ${limit}
+        `
+      } else {
+        parentComments = await sql`
+          SELECT 
+            c.id, c.post_id, c.parent_comment_id, c.user_id, c.content, c.image_url,
+            c.created_at, c.edited_at, c.like_count,
+            u.firebase_uid, u.name AS username, u.avatar_url
+          FROM comments c
+          LEFT JOIN users u ON c.user_id = u.user_id
+          WHERE c.post_id = ${postId}
+            AND c.is_deleted = FALSE
+            AND c.parent_comment_id IS NULL
+            AND c.id < ${cursor}
+          ORDER BY c.created_at DESC
+          LIMIT ${limit}
+        `
+      }
     } else {
-      parentComments = await sql`
-        SELECT 
-          c.id, c.post_id, c.parent_comment_id, c.user_id, c.content, c.image_url,
-          c.created_at, c.edited_at, c.like_count,
-          u.firebase_uid, u.name AS username, u.avatar_url
-        FROM comments c
-        LEFT JOIN users u ON c.user_id = u.user_id
-        WHERE c.post_id = ${postId}
-          AND c.is_deleted = FALSE
-          AND c.parent_comment_id IS NULL
-          ${mutedUserIds.length > 0 ? sql`AND c.user_id NOT IN ${sql(mutedUserIds)}` : sql``}
-        ORDER BY c.created_at DESC
-        LIMIT ${limit}
-      `
+      if (mutedUserIds.length > 0) {
+        parentComments = await sql`
+          SELECT 
+            c.id, c.post_id, c.parent_comment_id, c.user_id, c.content, c.image_url,
+            c.created_at, c.edited_at, c.like_count,
+            u.firebase_uid, u.name AS username, u.avatar_url
+          FROM comments c
+          LEFT JOIN users u ON c.user_id = u.user_id
+          WHERE c.post_id = ${postId}
+            AND c.is_deleted = FALSE
+            AND c.parent_comment_id IS NULL
+            AND c.user_id != ALL(${mutedUserIds})
+          ORDER BY c.created_at DESC
+          LIMIT ${limit}
+        `
+      } else {
+        parentComments = await sql`
+          SELECT 
+            c.id, c.post_id, c.parent_comment_id, c.user_id, c.content, c.image_url,
+            c.created_at, c.edited_at, c.like_count,
+            u.firebase_uid, u.name AS username, u.avatar_url
+          FROM comments c
+          LEFT JOIN users u ON c.user_id = u.user_id
+          WHERE c.post_id = ${postId}
+            AND c.is_deleted = FALSE
+            AND c.parent_comment_id IS NULL
+          ORDER BY c.created_at DESC
+          LIMIT ${limit}
+        `
+      }
     }
 
     // Fetch all replies for these parent comments
-    const parentIds = parentComments.map(c => c.id)
+    const parentIds = parentComments.map(c => parseInt(c.id, 10))
     let replies = []
     if (parentIds.length > 0) {
-      replies = await sql`
-        SELECT 
-          c.id, c.post_id, c.parent_comment_id, c.user_id, c.content, c.image_url,
-          c.created_at, c.edited_at, c.like_count,
-          u.firebase_uid, u.name AS username, u.avatar_url
-        FROM comments c
-        LEFT JOIN users u ON c.user_id = u.user_id
-        WHERE c.parent_comment_id IN ${sql(parentIds)}
-          AND c.is_deleted = FALSE
-          ${mutedUserIds.length > 0 ? sql`AND c.user_id NOT IN ${sql(mutedUserIds)}` : sql``}
-        ORDER BY c.like_count DESC, c.created_at DESC
-      `
+      if (mutedUserIds.length > 0) {
+        replies = await sql`
+          SELECT 
+            c.id, c.post_id, c.parent_comment_id, c.user_id, c.content, c.image_url,
+            c.created_at, c.edited_at, c.like_count,
+            u.firebase_uid, u.name AS username, u.avatar_url
+          FROM comments c
+          LEFT JOIN users u ON c.user_id = u.user_id
+          WHERE c.parent_comment_id = ANY(${parentIds})
+            AND c.is_deleted = FALSE
+            AND c.user_id != ALL(${mutedUserIds})
+          ORDER BY c.like_count DESC, c.created_at DESC
+        `
+      } else {
+        replies = await sql`
+          SELECT 
+            c.id, c.post_id, c.parent_comment_id, c.user_id, c.content, c.image_url,
+            c.created_at, c.edited_at, c.like_count,
+            u.firebase_uid, u.name AS username, u.avatar_url
+          FROM comments c
+          LEFT JOIN users u ON c.user_id = u.user_id
+          WHERE c.parent_comment_id = ANY(${parentIds})
+            AND c.is_deleted = FALSE
+          ORDER BY c.like_count DESC, c.created_at DESC
+        `
+      }
     }
 
     // Group replies under parent comments
