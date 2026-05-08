@@ -65,12 +65,16 @@ export async function sendLocalNotification() {
     return;
   }
 
+  // Import the logo image
+  const logo = require('../assets/images/logo.png');
+
   // Schedule the notification to appear using Expo's scheduler
   await Notifications.scheduleNotificationAsync({
     content: {
       title: "BeachEchoes",
       body: "It works! This is a local notification.",
       sound: true, // Enable sound
+      icon: logo, // Set the notification icon
     },
     // The trigger determines *when* the notification fires.
     // setting trigger to 'null' causes it to fire immediately.
@@ -92,12 +96,14 @@ export async function scheduleCustomNotification(title, body, data = {}) {
   }
 
   try {
+    const logo = require('../assets/images/logo.png');
     await Notifications.scheduleNotificationAsync({
       content: {
         title,
         body,
         sound: true,
         data,
+        icon: logo, // Set the notification icon
       },
       trigger: null, // Send immediately
     });

@@ -1,66 +1,18 @@
-import React, { useEffect, useState, useContext, useCallback, useRef } from 'react'
+import React, { useEffect, useState, useContext, useCallback } from 'react'
 import {
   View, Text, Image, StyleSheet,
   FlatList, TouchableOpacity, ActivityIndicator, Alert,
 } from 'react-native'
-import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useRouter } from 'expo-router'
 import Background from '../components/Background'
 import Header from '../components/Header'
 import Button from '../components/Button'
-import { requestPermissions, scheduleCustomNotification } from '../components/LocalNotifications'
 import { API_BASE } from '../config/api'
 import { auth } from '../config/firebase'
 import { AuthContext } from '../context/AuthContext'
 import { theme } from '../core/theme'
 
-const POLLING_INTERVAL_MS = 30000 // 30 seconds
-const SENT_NOTIFICATIONS_KEY = '@beachechoes:sent_notifications'
-
-/**
- * Maps a notification object to a local notification title and body
- */
-function getNotificationContent(notification) {
-  const { type, data } = notification
-
-  switch (type) {
-    case 'post_liked':
-      return {
-        title: data.liker_name || 'Someone',
-        body: 'liked your post',
-      }
-    case 'post_expired':
-      return {
-        title: 'beachechoes',
-        body: 'post expired',
-      }
-    case 'new_follower':
-      return {
-        title: data.from_name || 'Someone',
-        body: 'started following you',
-      }
-    case 'friend_request':
-      return {
-        title: data.from_name || 'Someone',
-        body: 'sent you a friend request',
-      }
-    case 'comment_on_post':
-      return {
-        title: data.from_user_name || 'Someone',
-        body: 'commented on your post',
-      }
-    case 'comment_reply':
-      return {
-        title: data.from_user_name || 'Someone',
-        body: 'replied to your comment',
-      }
-    default:
-      return {
-        title: 'beachechoes',
-        body: 'You have a new notification',
-      }
-  }
-}
+const POLLING_INTERVAL_MS = 5000 // 5 seconds
 
 export default function Notifications() {
   const router = useRouter()
@@ -69,32 +21,6 @@ export default function Notifications() {
   const [notifications, setNotifications] = useState([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
-  
-  // Track notification IDs we've already sent local notifications for
-  const sentNotificationIds = useRef(new Set())
-
-  // Load sent notification IDs from AsyncStorage
-  const loadSentNotificationIds = useCallback(async () => {
-    try {
-      const stored = await AsyncStorage.getItem(SENT_NOTIFICATIONS_KEY)
-      if (stored) {
-        const ids = JSON.parse(stored)
-        sentNotificationIds.current = new Set(ids)
-      }
-    } catch (err) {
-      console.error('Failed to load sent notification IDs:', err)
-    }
-  }, [])
-
-  // Save sent notification IDs to AsyncStorage
-  const saveSentNotificationIds = useCallback(async () => {
-    try {
-      const ids = Array.from(sentNotificationIds.current)
-      await AsyncStorage.setItem(SENT_NOTIFICATIONS_KEY, JSON.stringify(ids))
-    } catch (err) {
-      console.error('Failed to save sent notification IDs:', err)
-    }
-  }, [])
 
   const fetchNotifications = useCallback(async (isRefresh = false) => {
     try {
@@ -105,33 +31,7 @@ export default function Notifications() {
       })
       const data = await res.json()
       if (data?.success) {
-        const fetchedNotifications = data.notifications ?? []
-        
-        // Trigger local notification for each unread notification that hasn't been sent yet
-        for (const notification of fetchedNotifications) {
-          // Only send if unread and not already sent
-          if (!notification.read && !sentNotificationIds.current.has(notification.id)) {
-            const { title, body } = getNotificationContent(notification)
-            
-            try {
-              await scheduleCustomNotification(
-                title,
-                body,
-                { notificationId: notification.id, type: notification.type }
-              )
-              
-              // Mark this notification as sent
-              sentNotificationIds.current.add(notification.id)
-            } catch (err) {
-              console.error('Failed to send local notification:', err)
-            }
-          }
-        }
-        
-        // Persist sent notification IDs to AsyncStorage
-        await saveSentNotificationIds()
-        
-        setNotifications(fetchedNotifications)
+        setNotifications(data.notifications ?? [])
       }
     } catch (err) {
       console.error('Fetch notifications error:', err)
@@ -139,34 +39,19 @@ export default function Notifications() {
       setLoading(false)
       if (isRefresh) setRefreshing(false)
     }
-  }, [saveSentNotificationIds])
+  }, [])
 
   useEffect(() => {
-    // Request notification permissions on mount
-    const requestNotificationPermissions = async () => {
-      try {
-        await requestPermissions()
-      } catch (err) {
-        console.error('Failed to request notification permissions:', err)
-      }
-    }
-    
-    // Initialize sent notification IDs from AsyncStorage
-    const initialize = async () => {
-      await loadSentNotificationIds()
-      requestNotificationPermissions()
-      fetchNotifications()
-    }
-    
-    initialize()
+    // Fetch notifications on mount
+    fetchNotifications()
 
-    // Poll for new notifications every 30 seconds
+    // Poll for new notifications every 5 seconds
     const interval = setInterval(() => {
       fetchNotifications(true)
     }, POLLING_INTERVAL_MS)
 
     return () => clearInterval(interval)
-  }, [fetchNotifications, loadSentNotificationIds])
+  }, [fetchNotifications])
 
   const markAsRead = async (notificationIds) => {
     try {

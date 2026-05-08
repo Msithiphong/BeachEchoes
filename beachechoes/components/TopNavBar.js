@@ -9,7 +9,7 @@ import { auth } from '../config/firebase'
 
 export const NAVBAR_HEIGHT = 38
 
-const NOTIFICATION_POLL_INTERVAL_MS = 30000 // 30 seconds
+const NOTIFICATION_POLL_INTERVAL_MS = 5000 // 5 seconds
 
 export default function TopNavBar({ translateY }) {
   const insets = useSafeAreaInsets()
