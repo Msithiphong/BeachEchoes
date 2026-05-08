@@ -13,6 +13,13 @@ import { theme } from '../../core/theme'
 import { useDraftPost } from '../../context/DraftPostContext'
 import { latLngToNormalized, pointInPolygon, snapToPolygonBoundary } from '../../helpers/mapUtils'
 
+const CSULB_FALLBACK_LOCATION = {
+  coords: {
+    latitude: 33.7838,
+    longitude: -118.1141,
+  },
+}
+
 function parseExifDate(value) {
   if (!value || typeof value !== 'string') return null
   const normalized = value.replace(/^(\d{4}):(\d{2}):(\d{2})/, '$1-$2-$3')

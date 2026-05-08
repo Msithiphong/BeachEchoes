@@ -1,17 +1,32 @@
 import React from 'react'
-import { StyleSheet } from 'react-native'
+import { Platform, StyleSheet } from 'react-native'
 import { Text } from 'react-native-paper'
-import { theme } from '../core/theme'
-
+import { useAppTheme } from '../context/AppThemeContext'
 export default function Header(props) {
-  return <Text style={styles.header} {...props} />
+  const { isDark } = useAppTheme()
+  return <Text style={[styles.header, isDark ? styles.textWhite : styles.textDark]} {...props} />
 }
 
 const styles = StyleSheet.create({
   header: {
-    fontSize: 21,
-    color: theme.colors.primary,
-    fontWeight: 'bold',
-    paddingVertical: 12,
+    fontSize: 29,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+    fontFamily: Platform.select({
+      ios: 'AvenirNext-DemiBold',
+      android: 'sans-serif-medium',
+      default: undefined,
+    }),
+    paddingVertical: 8,
+    textShadowColor: 'rgba(255,255,255,0.18)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 8,
+  },
+  textWhite: {
+    color: '#f7fbff',
+  },
+  textDark: {
+    color: '#08304b',
+    textShadowColor: 'rgba(8, 48, 75, 0.12)',
   },
 })

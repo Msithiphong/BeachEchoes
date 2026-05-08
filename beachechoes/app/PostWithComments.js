@@ -15,7 +15,6 @@ import {
   UIManager,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import * as ImagePicker from 'expo-image-picker';
 import { AuthContext } from '../context/AuthContext';
@@ -26,6 +25,7 @@ import LikeButton from '../components/LikeButton';
 import ReportPostModal from '../components/ReportPostModal';
 import DeletePostModal from '../components/DeletePostModal';
 import { theme } from '../core/theme';
+import CoastalGradient from '../components/CoastalGradient';
 
 // Enable LayoutAnimation on Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -493,12 +493,7 @@ export default function PostWithComments() {
   };
 
   return (
-    <LinearGradient
-      colors={['#96c7e3', '#edd02c']}
-      start={{ x: 0.5, y: 0 }}
-      end={{ x: 0.5, y: 1 }}
-      style={styles.container}
-    >
+    <CoastalGradient style={styles.container}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.container}
@@ -602,7 +597,7 @@ export default function PostWithComments() {
           setDeleteTarget(null);
         }}
       />
-    </LinearGradient>
+    </CoastalGradient>
   );
 }
 

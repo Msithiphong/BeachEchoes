@@ -1,9 +1,9 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, ActivityIndicator, StyleSheet, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useDraftPost } from '../context/DraftPostContext';
 import { publishPost } from '../helpers/postUpload';
+import CoastalGradient from '../components/CoastalGradient';
 
 /**
  * Intermediate screen that runs the publish network request.
@@ -59,18 +59,13 @@ export default function PostPublish() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <LinearGradient
-      colors={['#96c7e3', '#edd02c']}
-      start={{ x: 0.5, y: 0 }}
-      end={{ x: 0.5, y: 1 }}
-      style={styles.container}
-    >
+    <CoastalGradient style={styles.container}>
       <View style={styles.card}>
         <ActivityIndicator size="large" color="#0f172a" />
         <Text style={styles.title}>Publishing Your Echo</Text>
         <Text style={styles.label}>Sending your post to the map...</Text>
       </View>
-    </LinearGradient>
+    </CoastalGradient>
   );
 }
 

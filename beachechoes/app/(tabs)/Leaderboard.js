@@ -1,20 +1,21 @@
 // app/(tabs)/Leaderboard.js
 
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { View, StyleSheet, ScrollView, Image, useWindowDimensions, Pressable } from 'react-native'
 import { Text, Surface, Avatar } from 'react-native-paper'
-import { Stack, useRouter } from 'expo-router'
+import { Stack } from 'expo-router'
 
 import Background from '../../components/Background'
-import Button from '../../components/Button'
 import { API_BASE } from '../../config/api'
+import WaveRefreshOverlay from '../../components/WaveRefreshOverlay'
+import { useAppTheme } from '../../context/AppThemeContext'
 
 const medalGold = require('../../assets/images/gold-medal.png')
 const medalSilver = require('../../assets/images/silvar-medal.png')
 const medalCopper = require('../../assets/images/copper-medal.png')
 
 export default function Leaderboard() {
-  const router = useRouter()
+  const { isDark } = useAppTheme()
   const { width: screenW } = useWindowDimensions()
 
   const BG_MAX_WIDTH = 340
@@ -30,6 +31,7 @@ export default function Leaderboard() {
   const [error, setError] = useState('')
   const [rows, setRows] = useState([])
   const [stats, setStats] = useState({ echoes: 0, appraises: 0, comments: 0 })
+  const waveRef = useRef(null)
 
   // Removed togglePeriodValue
 
@@ -41,7 +43,10 @@ export default function Leaderboard() {
     return `${API_BASE}/leaderboard?${params.toString()}`
   }, [view])
 
-  async function loadData() {
+  async function loadData(withWave = false) {
+    if (withWave) {
+      waveRef.current?.trigger()
+    }
     setLoading(true)
     setError('')
 
@@ -88,7 +93,7 @@ export default function Leaderboard() {
   }
 
   useEffect(() => {
-    loadData()
+    loadData(false)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view])
 
@@ -114,13 +119,16 @@ export default function Leaderboard() {
           showsVerticalScrollIndicator={false}
         >
           <Surface style={styles.headerBar} elevation={0}>
-            <Text style={styles.headerTitle}>Leaderboard</Text>
+            <Text style={[styles.headerTitle, styles.textWhite]}>Leaderboard</Text>
           </Surface>
 
           <Surface style={styles.filterWrap} elevation={0}>
             <View style={styles.segmentRow}>
               <Pressable
-                onPress={() => setView('users')}
+                onPress={() => {
+                  waveRef.current?.trigger()
+                  setView('users')
+                }}
                 style={[
                   styles.segmentPill,
                   view === 'users' && styles.segmentPillSelected,
@@ -137,7 +145,10 @@ export default function Leaderboard() {
               </Pressable>
 
               <Pressable
-                onPress={() => setView('posts')}
+                onPress={() => {
+                  waveRef.current?.trigger()
+                  setView('posts')
+                }}
                 style={[
                   styles.segmentPill,
                   view === 'posts' && styles.segmentPillSelected,
@@ -154,10 +165,13 @@ export default function Leaderboard() {
               </Pressable>
             </View>
           </Surface>
+          <Pressable style={styles.refreshBtn} onPress={() => loadData(true)}>
+            <Text style={styles.refreshBtnText}>Refresh Board</Text>
+          </Pressable>
 
-          {error !== '' && <Text style={styles.error}>{error}</Text>}
+          {error !== '' && <Text style={[styles.error, isDark ? styles.textWhite : styles.textDark]}>{error}</Text>}
 
-          <Surface style={styles.topCard} elevation={0}>
+          <Surface style={[styles.topCard, isDark ? styles.surfaceDark : styles.surfaceLight]} elevation={0}>
             <View style={styles.topCardRow}>
               <View style={styles.topAvatarWrap}>
                 {renderAvatar(topItem, view)}
@@ -169,15 +183,15 @@ export default function Leaderboard() {
 
             <View style={styles.topTextBlock}>
               {view === 'users' ? (
-                <Text style={styles.topName} numberOfLines={1}>
+                <Text style={[styles.topName, isDark ? styles.textWhite : styles.textDark]} numberOfLines={1}>
                   {topItem?.name ?? '—'}
                 </Text>
               ) : (
                 <>
-                  <Text style={styles.topMessageTitle} numberOfLines={2}>
+                  <Text style={[styles.topMessageTitle, isDark ? styles.textWhite : styles.textDark]} numberOfLines={2}>
                     {topItem?.message ?? '—'}
                   </Text>
-                  <Text style={styles.topByUser} numberOfLines={1}>
+                  <Text style={[styles.topByUser, isDark ? styles.textSoftWhite : styles.textSoftDark]} numberOfLines={1}>
                     By {topItem?.author?.name ?? '—'}
                   </Text>
                 </>
@@ -193,7 +207,7 @@ export default function Leaderboard() {
             </View>
           </Surface>
 
-          <Text style={[styles.sectionTitle, styles.centeredText]}>
+          <Text style={[styles.sectionTitle, styles.centeredText, isDark ? styles.textWhite : styles.textDark]}>
             {view === 'users' ? 'Leaderboard Users' : 'Leaderboard Posts'}
           </Text>
 
@@ -202,33 +216,33 @@ export default function Leaderboard() {
               const rank = Number(r.rank ?? i + 2)
 
               return (
-                <Surface key={`${view}-${rank}-${i}`} style={styles.itemCard} elevation={0}>
+                <Surface key={`${view}-${rank}-${i}`} style={[styles.itemCard, isDark ? styles.itemCardDark : styles.itemCardLight]} elevation={0}>
                   <View style={styles.itemRow}>
                     <View style={styles.rankBlock}>
                       <View style={styles.rankAndMedalRow}>
                         {rank <= 3 ? <View style={styles.rankMedal}>{renderMedal(rank, 18)}</View> : null}
-                        <Text style={styles.rankText}>#{rank}</Text>
+                        <Text style={[styles.rankText, isDark ? styles.textWhite : styles.textDark]}>#{rank}</Text>
                       </View>
                     </View>
 
                     <View style={styles.itemNameBlock}>
                       {view === 'users' ? (
-                        <Text style={styles.itemName} numberOfLines={1}>
+                        <Text style={[styles.itemName, isDark ? styles.textWhite : styles.textDark]} numberOfLines={1}>
                           {r.name ?? 'Unknown User'}
                         </Text>
                       ) : (
                         <>
-                          <Text style={styles.itemMessageText} numberOfLines={2}>
+                          <Text style={[styles.itemMessageText, isDark ? styles.textWhite : styles.textDark]} numberOfLines={2}>
                             {r.message ?? 'Unknown Post'}
                           </Text>
-                          <Text style={styles.itemByUser} numberOfLines={1}>
+                          <Text style={[styles.itemByUser, isDark ? styles.textSoftWhite : styles.textSoftDark]} numberOfLines={1}>
                             By {r.author?.name ?? 'Unknown'}
                           </Text>
                         </>
                       )}
                     </View>
 
-                    <Text style={styles.itemVotes}>
+                    <Text style={[styles.itemVotes, isDark ? styles.textWhite : styles.textDark]}>
                       {view === 'users'
                         ? `${String(r.total_upvotes ?? 0)} Votes`
                         : `${String(r.upvotes ?? 0)} Votes`}
@@ -239,11 +253,12 @@ export default function Leaderboard() {
             })}
 
             {!listRows.length && !loading && (
-              <Text style={[styles.empty, styles.centeredText]}>No results yet</Text>
+              <Text style={[styles.empty, styles.centeredText, isDark ? styles.textWhite : styles.textDark]}>No results yet</Text>
             )}
           </View>
         </ScrollView>
       </View>
+      <WaveRefreshOverlay ref={waveRef} />
     </Background>
   )
 }
@@ -318,9 +333,6 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     marginLeft: 0,
     marginRight: 0,
-  },
-  refreshBtn: {
-    width: 120,
   },
   headerTitle: {
     color: '#000',
@@ -469,6 +481,16 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(0,0,0,1)',
     padding: 12,
   },
+  itemCardDark: {
+    backgroundColor: 'rgba(3, 26, 40, 0.82)',
+    borderWidth: 1,
+    borderColor: 'rgba(125, 233, 255, 0.22)',
+  },
+  itemCardLight: {
+    backgroundColor: 'rgba(255,255,255,0.72)',
+    borderWidth: 1,
+    borderColor: 'rgba(8, 48, 75, 0.16)',
+  },
   itemRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -526,9 +548,48 @@ const styles = StyleSheet.create({
     color: '#000',
     marginBottom: 10,
   },
+  refreshBtn: {
+    alignSelf: 'center',
+    marginTop: 10,
+    marginBottom: 8,
+    backgroundColor: 'rgba(3, 32, 53, 0.58)',
+    borderWidth: 1,
+    borderColor: 'rgba(125, 233, 255, 0.42)',
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  refreshBtnText: {
+    color: '#fff',
+    fontWeight: '700',
+    fontSize: 12,
+    letterSpacing: 0.2,
+  },
 
   centeredText: {
     textAlign: 'center',
     alignSelf: 'center',
+  },
+  surfaceDark: {
+    backgroundColor: 'rgba(2, 30, 49, 0.38)',
+    borderWidth: 1,
+    borderColor: 'rgba(125, 233, 255, 0.28)',
+  },
+  surfaceLight: {
+    backgroundColor: 'rgba(255,255,255,0.6)',
+    borderWidth: 1,
+    borderColor: 'rgba(8, 48, 75, 0.2)',
+  },
+  textWhite: {
+    color: '#f7fbff',
+  },
+  textSoftWhite: {
+    color: 'rgba(247, 251, 255, 0.86)',
+  },
+  textDark: {
+    color: '#08304b',
+  },
+  textSoftDark: {
+    color: 'rgba(8, 48, 75, 0.82)',
   },
 })

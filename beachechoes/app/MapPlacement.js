@@ -17,6 +17,7 @@ import CampusMap from '../components/CampusMap';
 import ClusteredPin from '../components/ClusteredPin';
 import YouAreHerePin from '../components/YouAreHerePin';
 import { pointInPolygon, latLngToNormalized, snapToPolygonBoundary } from '../helpers/mapUtils';
+import CoastalGradient from '../components/CoastalGradient';
 
 export default function MapPlacement() {
   const router = useRouter();
@@ -272,12 +273,7 @@ export default function MapPlacement() {
   }
 
   return (
-    <LinearGradient
-      colors={['#96c7e3', '#edd02c']}
-      start={{ x: 0.5, y: 0 }}
-      end={{ x: 0.5, y: 1 }}
-      style={styles.container}
-    >
+    <CoastalGradient style={styles.container}>
       <View style={styles.headerCard}>
         <Text style={styles.heading}>Pin Your Echo</Text>
         <Text style={styles.sub}>Tap one spot on campus to publish your post.</Text>
@@ -371,7 +367,7 @@ export default function MapPlacement() {
           </LinearGradient>
         </TouchableOpacity>
       </View>
-    </LinearGradient>
+    </CoastalGradient>
   );
 }
 

@@ -15,7 +15,7 @@
  * @component
  */
 
-import React, { useContext, useEffect, useState } from 'react'
+import React, { useContext, useEffect, useRef, useState } from 'react'
 import { View, Animated, StyleSheet, ActivityIndicator, Text, TouchableOpacity } from 'react-native'
 import { useRouter } from 'expo-router'
 import Background from '../../components/Background'
@@ -27,8 +27,11 @@ import { AuthContext } from '../../context/AuthContext'
 import { ScrollContext } from '../../context/ScrollContext'
 import { auth } from '../../config/firebase'
 import { API_BASE } from '../../config/api'
+import WaveRefreshOverlay from '../../components/WaveRefreshOverlay'
+import { useAppTheme } from '../../context/AppThemeContext'
 
 export default function Dashboard() {
+  const { isDark, toggleTheme } = useAppTheme()
   // Navigation hook
   const router = useRouter()
   
@@ -39,11 +42,15 @@ export default function Dashboard() {
   // Posts state
   const [posts, setPosts] = useState([])
   const [loadingPosts, setLoadingPosts] = useState(true)
+  const waveRef = useRef(null)
 
   /**
    * Fetch posts from the feed
    */
-  const fetchPosts = async () => {
+  const fetchPosts = async (withWave = false) => {
+    if (withWave) {
+      waveRef.current?.trigger()
+    }
     try {
       setLoadingPosts(true)
       // Include auth token to get liked status
@@ -80,7 +87,7 @@ export default function Dashboard() {
    */
   useEffect(() => {
     if (user) {
-      fetchPosts()
+      fetchPosts(false)
     }
   }, [user])
 
@@ -103,7 +110,7 @@ export default function Dashboard() {
     return (
       <View style={styles.container}>
         <Background style={styles.content}>
-          <ActivityIndicator size="large" color="#560CCE" />
+          <ActivityIndicator size="large" color="#7be5ff" />
         </Background>
       </View>
     )
@@ -137,13 +144,20 @@ export default function Dashboard() {
               Explore California State University Long Beach and Connect with others!
             </Paragraph>
 
-            <TouchableOpacity style={styles.refreshBtn} onPress={fetchPosts}>
-              <Text style={styles.refreshBtnText}>Refresh Posts</Text>
-            </TouchableOpacity>
+            <View style={styles.topActionsRow}>
+              <TouchableOpacity style={styles.refreshBtn} onPress={() => fetchPosts(true)}>
+                <Text style={styles.refreshBtnText}>Refresh Posts</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.themeBtn} onPress={toggleTheme}>
+                <Text style={[styles.themeBtnText, !isDark && styles.themeBtnTextLight]}>
+                  {isDark ? 'Light Mode' : 'Dark Mode'}
+                </Text>
+              </TouchableOpacity>
+            </View>
 
             {/* Loading state for posts */}
             {loadingPosts ? (
-              <ActivityIndicator size="large" color="#560CCE" style={{ marginTop: 20 }} />
+              <ActivityIndicator size="large" color="#7be5ff" style={{ marginTop: 20 }} />
             ) : posts.length > 0 ? (
               // Render real posts from the database
               posts.map((post) => (
@@ -178,6 +192,7 @@ export default function Dashboard() {
             */}
 
         </Animated.ScrollView>
+        <WaveRefreshOverlay ref={waveRef} />
       </Background>
     </View>
   )
@@ -196,7 +211,8 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     alignItems: 'center',
-    paddingVertical: 0,
+    paddingTop: 4,
+    paddingBottom: 34,
   },
   email: {
     fontSize: 14,
@@ -205,8 +221,10 @@ const styles = StyleSheet.create({
   },
   emptyState: {
     width: '100%',
-    backgroundColor: '#f0f0f5',
-    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.25)',
     paddingVertical: 40,
     paddingHorizontal: 20,
     alignItems: 'center',
@@ -216,19 +234,46 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#666',
+    color: '#fff',
     textAlign: 'center',
   },
   refreshBtn: {
-    marginTop: 12,
-    backgroundColor: '#0f172a',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 10,
+    marginTop: 10,
+    backgroundColor: 'rgba(3, 32, 53, 0.58)',
+    borderWidth: 1,
+    borderColor: 'rgba(125, 233, 255, 0.42)',
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 999,
+  },
+  topActionsRow: {
+    marginTop: 2,
+    flexDirection: 'row',
+    gap: 10,
+    alignItems: 'center',
+  },
+  themeBtn: {
+    marginTop: 10,
+    backgroundColor: 'rgba(255,255,255,0.24)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.38)',
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 999,
+  },
+  themeBtnText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 13,
+    letterSpacing: 0.2,
+  },
+  themeBtnTextLight: {
+    color: '#08304b',
   },
   refreshBtnText: {
     color: '#fff',
-    fontWeight: '700',
+    fontWeight: '600',
     fontSize: 13,
+    letterSpacing: 0.2,
   },
 })

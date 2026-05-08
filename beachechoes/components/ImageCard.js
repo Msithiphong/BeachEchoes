@@ -27,6 +27,8 @@ export default function ImageCard({
   const [likes, setLikes] = useState(likeCount)
   const [pending, setPending] = useState(false)
   const heartScale = useRef(new Animated.Value(0)).current
+  const cardScale = useRef(new Animated.Value(1)).current
+  const cardGlow = useRef(new Animated.Value(0)).current
   const lastTap = useRef(0)
   const singleTapTimer = useRef(null)
 
@@ -68,7 +70,34 @@ export default function ImageCard({
       // Single tap - schedule navigation after debounce delay
       lastTap.current = now
       if (onImagePress && postId) {
+        Animated.parallel([
+          Animated.spring(cardScale, {
+            toValue: 0.97,
+            speed: 25,
+            bounciness: 6,
+            useNativeDriver: false,
+          }),
+          Animated.timing(cardGlow, {
+            toValue: 1,
+            duration: 120,
+            useNativeDriver: false,
+          }),
+        ]).start()
+
         singleTapTimer.current = setTimeout(() => {
+          Animated.parallel([
+            Animated.spring(cardScale, {
+              toValue: 1,
+              speed: 16,
+              bounciness: 9,
+              useNativeDriver: false,
+            }),
+            Animated.timing(cardGlow, {
+              toValue: 0,
+              duration: 180,
+              useNativeDriver: false,
+            }),
+          ]).start()
           onImagePress(postId)
           singleTapTimer.current = null
         }, SINGLE_TAP_DELAY)
@@ -189,7 +218,24 @@ export default function ImageCard({
   }
 
   return (
-    <View style={[styles.card, DEBUG_IMAGECARD && styles.debugCard, style]}>
+    <Animated.View
+      style={[
+        styles.card,
+        DEBUG_IMAGECARD && styles.debugCard,
+        style,
+        {
+          transform: [{ scale: cardScale }],
+          borderColor: cardGlow.interpolate({
+            inputRange: [0, 1],
+            outputRange: ['rgba(255,255,255,0.10)', 'rgba(121,245,255,0.75)'],
+          }),
+          shadowOpacity: cardGlow.interpolate({
+            inputRange: [0, 1],
+            outputRange: [0.2, 0.4],
+          }),
+        },
+      ]}
+    >
       <TouchableOpacity activeOpacity={1} onPress={handleDoubleTap} style={[styles.touchable, DEBUG_IMAGECARD && styles.debugTouchable]}>
         <ImageBackground
           source={image}
@@ -259,7 +305,7 @@ export default function ImageCard({
           </View>
         </ImageBackground>
       </TouchableOpacity>
-    </View>
+    </Animated.View>
   )
 }
 
@@ -270,11 +316,13 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     overflow: 'hidden',
     marginVertical: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
     elevation: 5,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
+    shadowOpacity: 0.2,
+    shadowRadius: 7,
   },
   image: {
     flex: 1,
@@ -325,7 +373,7 @@ const styles = StyleSheet.create({
     height: 36,
     borderRadius: 18,
     borderWidth: 2,
-    borderColor: '#ffffff',
+    borderColor: 'rgba(255,255,255,0.92)',
     backgroundColor: '#eee',
   },
   bigHeart: {
@@ -342,6 +390,10 @@ const styles = StyleSheet.create({
     bottom: 10,
     right: 12,
     gap: 4,
+    backgroundColor: 'rgba(0,0,0,0.24)',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 999,
   },
   commentBtn: {
     marginLeft: 4,

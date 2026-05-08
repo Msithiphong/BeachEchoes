@@ -15,11 +15,13 @@ import { AuthContext } from '../../context/AuthContext'
 import { uploadAvatar } from '../../helpers/avatarUpload'
 import { auth } from '../../config/firebase'
 import { API_BASE } from '../../config/api'
+import { useAppTheme } from '../../context/AppThemeContext'
 
 // Card watermark logo
 import logo from '../../assets/images/logo.png'
 
 export default function Profile() {
+  const { isDark, toggleTheme } = useAppTheme()
   const { user, logout } = useContext(AuthContext)
   const router = useRouter()
   const scrollRef = useRef(null)
@@ -284,7 +286,7 @@ export default function Profile() {
         )}
 
         {/* Profile Card */}
-        <View style={styles.card}>
+        <View style={[styles.card, isDark ? styles.surfaceDark : styles.surfaceLight]}>
           {/* Watermark behind everything */}
           <Image
             source={logo}
@@ -329,6 +331,19 @@ export default function Profile() {
                   <Text style={[styles.dropdownText, { color: '#333' }]}>Edit Profile</Text>
                 </TouchableOpacity>
               )}
+              <TouchableOpacity
+                style={styles.dropdownItem}
+                onPress={() => {
+                  setDropdownVisible(false)
+                  toggleTheme()
+                }}
+                activeOpacity={0.7}
+              >
+                <MaterialIcons name={isDark ? 'light-mode' : 'dark-mode'} size={20} color="#0b3954" />
+                <Text style={[styles.dropdownText, { color: '#0b3954' }]}>
+                  {isDark ? 'Light Mode' : 'Dark Mode'}
+                </Text>
+              </TouchableOpacity>
               {/* Log Out button */}
               <TouchableOpacity
                 style={styles.dropdownItem}
@@ -375,7 +390,7 @@ export default function Profile() {
               editable={!saving}
             />
           ) : (
-            <Text style={styles.username}>{name}</Text>
+            <Text style={[styles.username, isDark ? styles.textWhite : styles.textDark]}>{name}</Text>
           )}
 
           {/* Bio */}
@@ -389,7 +404,7 @@ export default function Profile() {
               editable={!saving}
             />
           ) : (
-            <Text style={styles.bioText}>{bio || 'No bio yet'}</Text>
+            <Text style={[styles.bioText, isDark ? styles.textSoftWhite : styles.textSoftDark]}>{bio || 'No bio yet'}</Text>
           )}
 
           {/* Toggles only in edit mode */}
@@ -399,7 +414,7 @@ export default function Profile() {
                 <View style={styles.toggleTextCol}>
                   <Text style={styles.toggleTitle}>Post Echoes anonymously</Text>
                   <Text style={styles.toggleSubtitle}>
-                    When enabled, your username won't show on new Echoes.
+                    When enabled, your username will not show on new Echoes.
                   </Text>
                 </View>
 
@@ -412,24 +427,24 @@ export default function Profile() {
         </View>
 
         {/* Stats (FORCED same width as card) */}
-        <View style={styles.statsCard}>
+        <View style={[styles.statsCard, isDark ? styles.surfaceDark : styles.surfaceLight]}>
           <TouchableOpacity style={styles.statItem} onPress={() => scrollRef.current?.scrollTo({ y: echoesYRef.current, animated: true })}>
-            <Text style={styles.statNumber}>{echoesCount}</Text>
-            <Text style={styles.statLabel}>Echoes</Text>
+            <Text style={[styles.statNumber, isDark ? styles.textWhite : styles.textDark]}>{echoesCount}</Text>
+            <Text style={[styles.statLabel, isDark ? styles.textSoftWhite : styles.textSoftDark]}>Echoes</Text>
           </TouchableOpacity>
 
           <View style={styles.statDivider} />
 
           <TouchableOpacity style={styles.statItem} onPress={() => router.push(`/profile/connections?userId=${user.uid}&type=following&name=${encodeURIComponent(name)}`)}>
-            <Text style={styles.statNumber}>{followingCount}</Text>
-            <Text style={styles.statLabel}>Following</Text>
+            <Text style={[styles.statNumber, isDark ? styles.textWhite : styles.textDark]}>{followingCount}</Text>
+            <Text style={[styles.statLabel, isDark ? styles.textSoftWhite : styles.textSoftDark]}>Following</Text>
           </TouchableOpacity>
 
           <View style={styles.statDivider} />
 
           <TouchableOpacity style={styles.statItem} onPress={() => router.push(`/profile/connections?userId=${user.uid}&type=followers&name=${encodeURIComponent(name)}`)}>
-            <Text style={styles.statNumber}>{followersCount}</Text>
-            <Text style={styles.statLabel}>Followers</Text>
+            <Text style={[styles.statNumber, isDark ? styles.textWhite : styles.textDark]}>{followersCount}</Text>
+            <Text style={[styles.statLabel, isDark ? styles.textSoftWhite : styles.textSoftDark]}>Followers</Text>
           </TouchableOpacity>
         </View>
 
@@ -444,7 +459,7 @@ export default function Profile() {
 
         {/* User Search */}
         <View style={styles.searchSection}>
-          <Text style={styles.searchTitle}>Discover Users</Text>
+          <Text style={[styles.searchTitle, isDark ? styles.textWhite : styles.textDark]}>Discover Users</Text>
           <View style={styles.searchContainer}>
             <UserAutocomplete
               onSelectUser={handleSelectUser}
@@ -455,7 +470,7 @@ export default function Profile() {
 
         {/* User's Posts */}
         <View style={styles.messagesSection} onLayout={(e) => { echoesYRef.current = e.nativeEvent.layout.y }}>
-          <Text style={styles.sectionTitle}>My Echoes</Text>
+          <Text style={[styles.sectionTitle, isDark ? styles.textWhite : styles.textDark]}>My Echoes</Text>
           {posts.length > 0 ? (
             posts.map((post) => (
               <ImageCard
@@ -492,7 +507,7 @@ const styles = StyleSheet.create({
   container: {
     marginTop: 40,
     paddingHorizontal: 16,
-    paddingTop: 16,
+    paddingTop: 8,
     paddingBottom: 40,
   },
 
@@ -505,13 +520,16 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
     alignItems: 'center',
     padding: 40,
-    borderRadius: 20,
-    backgroundColor: '#fff',
+    borderRadius: 24,
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.35)',
     marginBottom: 18,
     shadowColor: '#000',
-    shadowOpacity: 0.07,
-    shadowRadius: 12,
-    elevation: 4,
+    shadowOpacity: 0.2,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 7,
     overflow: 'hidden',
   },
 
@@ -528,6 +546,8 @@ const styles = StyleSheet.create({
   avatar: {
     marginBottom: 18,
     backgroundColor: '#eee',
+    borderWidth: 3,
+    borderColor: 'rgba(255,255,255,0.88)',
   },
 
   avatarOverlay: {
@@ -545,7 +565,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 18,
     right: 8,
-    backgroundColor: '#6e5ef6',
+    backgroundColor: '#1e88a7',
     borderRadius: 20,
     width: 40,
     height: 40,
@@ -562,6 +582,8 @@ const styles = StyleSheet.create({
   username: {
     fontSize: 28,
     fontWeight: '700',
+    color: '#04253a',
+    letterSpacing: 0.3,
   },
 
   nameInput: {
@@ -574,7 +596,7 @@ const styles = StyleSheet.create({
 
   bioText: {
     marginTop: 10,
-    color: '#666',
+    color: '#17384c',
     fontSize: 16,
     textAlign: 'center',
   },
@@ -598,7 +620,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 14,
     borderRadius: 12,
-    backgroundColor: '#f6f6fb',
+    backgroundColor: 'rgba(255,255,255,0.52)',
   },
 
   toggleTextCol: {
@@ -614,7 +636,7 @@ const styles = StyleSheet.create({
 
   toggleSubtitle: {
     fontSize: 13,
-    color: '#666',
+    color: '#254a62',
   },
 
   // Stats: same width as card + centered content
@@ -623,14 +645,17 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#fff',
-    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.24)',
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
     paddingVertical: 18,
     marginBottom: 18,
     shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 12,
-    elevation: 3,
+    shadowOpacity: 0.16,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 7 },
+    elevation: 5,
   },
 
   statItem: {
@@ -642,16 +667,17 @@ const styles = StyleSheet.create({
   statDivider: {
     width: 1,
     height: 36,
-    backgroundColor: '#eee',
+    backgroundColor: 'rgba(255,255,255,0.55)',
   },
 
   statNumber: {
     fontSize: 22,
     fontWeight: '700',
+    color: '#052f47',
   },
 
   statLabel: {
-    color: '#777',
+    color: '#20495f',
     fontSize: 14,
     marginTop: 4,
   },
@@ -662,7 +688,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 10,
-    backgroundColor: '#f0f0f5',
+    backgroundColor: 'rgba(255,255,255,0.3)',
   },
 
   backButtonText: {
@@ -681,6 +707,10 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginBottom: 12,
     textAlign: 'center',
+    color: '#f5fbff',
+    textShadowColor: 'rgba(0,0,0,0.22)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 5,
   },
 
   searchContainer: {
@@ -698,6 +728,10 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginBottom: 8,
     textAlign: 'center',
+    color: '#f5fbff',
+    textShadowColor: 'rgba(0,0,0,0.22)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 5,
   },
 
   center: {
@@ -707,8 +741,10 @@ const styles = StyleSheet.create({
 
   emptyEchoCard: {
     width: '100%',
-    backgroundColor: '#d1d1d1',
-    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.26)',
     paddingVertical: 40,
     alignItems: 'center',
     justifyContent: 'center',
@@ -717,7 +753,7 @@ const styles = StyleSheet.create({
   emptyEchoText: {
     fontSize: 16,
     fontWeight: '600',
-    color: '#666',
+    color: '#fff',
   },
 
   settingsButton: {
@@ -727,7 +763,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#f5f5f5',
+    backgroundColor: 'rgba(255,255,255,0.55)',
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 10,
@@ -737,8 +773,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 65,
     right: 16,
-    backgroundColor: '#fff',
-    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.95)',
+    borderRadius: 14,
     shadowColor: '#000',
     shadowOpacity: 0.15,
     shadowRadius: 8,
@@ -762,13 +798,27 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: '#d32f2f',
   },
+  surfaceDark: {
+    backgroundColor: 'rgba(2, 30, 49, 0.38)',
+    borderColor: 'rgba(125, 233, 255, 0.28)',
+  },
+  surfaceLight: {
+    backgroundColor: 'rgba(255, 255, 255, 0.6)',
+    borderColor: 'rgba(8, 48, 75, 0.2)',
+  },
+  textWhite: {
+    color: '#f7fbff',
+  },
+  textSoftWhite: {
+    color: 'rgba(247, 251, 255, 0.86)',
+  },
+  textDark: {
+    color: '#08304b',
+  },
+  textSoftDark: {
+    color: 'rgba(8, 48, 75, 0.82)',
+  },
 })
-
-
-
-
-
-
 
 
 

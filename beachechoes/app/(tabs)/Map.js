@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react'
+import React, { useEffect, useState, useCallback, useRef } from 'react'
 import {
   View,
   Text,
@@ -8,7 +8,6 @@ import {
   TouchableOpacity,
 } from 'react-native'
 import { useRouter } from 'expo-router'
-import { LinearGradient } from 'expo-linear-gradient'
 
 import { API_BASE } from '../../config/api'
 import { auth } from '../../config/firebase'
@@ -16,10 +15,14 @@ import { clusterPosts } from '../../helpers/clusterUtils'
 import CampusMap from '../../components/CampusMap'
 import ClusteredPin from '../../components/ClusteredPin'
 import { POST_CATEGORIES } from '../../config/postCategories'
+import CoastalGradient from '../../components/CoastalGradient'
+import WaveRefreshOverlay from '../../components/WaveRefreshOverlay'
+import { useAppTheme } from '../../context/AppThemeContext'
 
 const CATEGORY_FILTERS = ['All', ...POST_CATEGORIES, 'Muted']
 
 export default function MapScreen() {
+  const { isDark } = useAppTheme()
   const router = useRouter()
 
   const [posts, setPosts] = useState([])
@@ -28,8 +31,12 @@ export default function MapScreen() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [selectedCategory, setSelectedCategory] = useState('All')
+  const waveRef = useRef(null)
 
-  const fetchPosts = useCallback(async () => {
+  const fetchPosts = useCallback(async (withWave = false) => {
+    if (withWave) {
+      waveRef.current?.trigger()
+    }
     setLoading(true)
     setError(null)
 
@@ -95,7 +102,7 @@ export default function MapScreen() {
   }, [selectedCategory])
 
   useEffect(() => {
-    fetchPosts()
+    fetchPosts(false)
   }, [fetchPosts])
 
   function handlePinPress(ids) {
@@ -109,14 +116,14 @@ export default function MapScreen() {
   }
 
   return (
-    <LinearGradient colors={['#9ed4df', '#ffe000']} style={styles.container}>
+    <CoastalGradient style={styles.container}>
       <View style={styles.headerCard}>
-        <Text style={styles.heading}>Campus Map</Text>
-        <Text style={styles.subheading}>
+        <Text style={[styles.heading, !isDark && styles.textDark]}>Campus Map</Text>
+        <Text style={[styles.subheading, !isDark && styles.textSoftDark]}>
           Explore echoes by spot and category.
         </Text>
 
-        <TouchableOpacity style={styles.refreshBtn} onPress={fetchPosts}>
+        <TouchableOpacity style={styles.refreshBtn} onPress={() => fetchPosts(true)}>
           <Text style={styles.refreshBtnText}>Refresh</Text>
         </TouchableOpacity>
 
@@ -143,6 +150,7 @@ export default function MapScreen() {
                   style={[
                     styles.filterText,
                     active && styles.filterTextActive,
+                    !isDark && !active && styles.textDark,
                   ]}
                 >
                   {label}
@@ -159,8 +167,8 @@ export default function MapScreen() {
         <View style={styles.errorBox}>
           <Text style={styles.errorText}>{error}</Text>
 
-          <TouchableOpacity style={styles.retryBtn} onPress={fetchPosts}>
-            <Text style={styles.retryText}>Retry</Text>
+          <TouchableOpacity style={styles.retryBtn} onPress={() => fetchPosts(true)}>
+            <Text style={[styles.retryText, !isDark && styles.textDark]}>Retry</Text>
           </TouchableOpacity>
         </View>
       ) : (
@@ -186,7 +194,8 @@ export default function MapScreen() {
           </View>
         </View>
       )}
-    </LinearGradient>
+      <WaveRefreshOverlay ref={waveRef} />
+    </CoastalGradient>
   )
 }
 
@@ -200,7 +209,9 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     padding: 14,
     borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.84)',
+    backgroundColor: 'rgba(255,255,255,0.22)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.35)',
     shadowColor: '#111827',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.12,
@@ -210,12 +221,12 @@ const styles = StyleSheet.create({
   heading: {
     fontSize: 24,
     fontWeight: '800',
-    color: '#0f172a',
+    color: '#f7fbff',
   },
   subheading: {
     marginTop: 4,
     fontSize: 13,
-    color: '#334155',
+    color: 'rgba(247, 251, 255, 0.9)',
   },
   refreshBtn: {
     alignSelf: 'flex-end',
@@ -223,7 +234,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: 10,
-    backgroundColor: '#0f172a',
+    backgroundColor: 'rgba(3, 32, 53, 0.58)',
+    borderWidth: 1,
+    borderColor: 'rgba(125, 233, 255, 0.42)',
   },
   refreshBtnText: {
     color: '#fff',
@@ -237,19 +250,19 @@ const styles = StyleSheet.create({
   },
   filterChip: {
     borderWidth: 1,
-    borderColor: '#cbd5e1',
+    borderColor: 'rgba(255,255,255,0.42)',
     borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 7,
-    backgroundColor: '#f8fafc',
+    backgroundColor: 'rgba(255,255,255,0.25)',
   },
   filterChipActive: {
-    backgroundColor: '#1e293b',
-    borderColor: '#1e293b',
+    backgroundColor: '#0f304f',
+    borderColor: '#80eeff',
   },
   filterText: {
     fontSize: 13,
-    color: '#334155',
+    color: '#f7fbff',
     fontWeight: '700',
   },
   filterTextActive: {
@@ -265,7 +278,9 @@ const styles = StyleSheet.create({
   mapCard: {
     borderRadius: 18,
     overflow: 'hidden',
-    backgroundColor: 'rgba(255,255,255,0.82)',
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
     padding: 8,
     shadowColor: '#111827',
     shadowOffset: { width: 0, height: 2 },
@@ -275,11 +290,11 @@ const styles = StyleSheet.create({
   },
   emptyNote: {
     textAlign: 'center',
-    color: '#1f2937',
+    color: '#f7fbff',
     fontSize: 14,
     marginTop: 16,
     paddingHorizontal: 24,
-    backgroundColor: 'rgba(255,255,255,0.75)',
+    backgroundColor: 'rgba(2, 28, 48, 0.35)',
     borderRadius: 12,
     paddingVertical: 12,
   },
@@ -289,11 +304,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   errorText: {
-    color: '#7f1d1d',
+    color: '#fff',
     fontSize: 14,
     textAlign: 'center',
     marginBottom: 16,
-    backgroundColor: 'rgba(255,255,255,0.75)',
+    backgroundColor: 'rgba(130, 22, 22, 0.45)',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 10,
@@ -302,10 +317,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingVertical: 10,
     borderRadius: 12,
-    backgroundColor: '#0f172a',
+    backgroundColor: 'rgba(3, 32, 53, 0.7)',
   },
   retryText: {
     color: '#fff',
     fontWeight: '700',
+  },
+  textDark: {
+    color: '#08304b',
+  },
+  textSoftDark: {
+    color: 'rgba(8, 48, 75, 0.82)',
   },
 })

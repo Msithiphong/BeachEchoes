@@ -15,6 +15,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useDraftPost } from '../context/DraftPostContext';
 import PostImageWithOverlay from '../components/PostImageWithOverlay';
 import { DEFAULT_POST_CATEGORY, POST_CATEGORIES } from '../config/postCategories';
+import CoastalGradient from '../components/CoastalGradient';
 
 const MAX_OVERLAY_LENGTH = 2000;
 
@@ -69,12 +70,7 @@ export default function EditPost() {
     : 'Capture time unavailable';
 
   return (
-    <LinearGradient
-      colors={['#96c7e3', '#edd02c']}
-      start={{ x: 0.5, y: 0 }}
-      end={{ x: 0.5, y: 1 }}
-      style={styles.flex}
-    >
+    <CoastalGradient style={styles.flex}>
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
@@ -174,7 +170,7 @@ export default function EditPost() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
-    </LinearGradient>
+    </CoastalGradient>
   );
 }
 

@@ -1,19 +1,14 @@
 import React from 'react'
 import { StyleSheet, KeyboardAvoidingView } from 'react-native'
-import { LinearGradient } from 'expo-linear-gradient'
+import CoastalGradient from './CoastalGradient'
 
 export default function Background({ children }) {
   return (
-    <LinearGradient
-      colors={['#96c7e3', '#edd02c']}
-      start={{ x: 0.5, y: 0 }}
-      end={{ x: 0.5, y: 1 }}
-      style={styles.background}
-    >
+    <CoastalGradient style={styles.background}>
       <KeyboardAvoidingView style={styles.container} behavior="padding">
         {children}
       </KeyboardAvoidingView>
-    </LinearGradient>
+    </CoastalGradient>
   )
 }
 

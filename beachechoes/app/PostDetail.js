@@ -8,7 +8,6 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { AuthContext } from '../context/AuthContext';
 import { API_BASE } from '../config/api';
@@ -18,6 +17,7 @@ import LikeButton from '../components/LikeButton';
 import ReportPostModal from '../components/ReportPostModal';
 import DeletePostModal from '../components/DeletePostModal';
 import { theme } from '../core/theme';
+import CoastalGradient from '../components/CoastalGradient';
 
 function formatDateTime(ts) {
   if (!ts) return 'Unknown time';
@@ -122,12 +122,7 @@ export default function PostDetail() {
   }
 
   return (
-    <LinearGradient
-      colors={['#96c7e3', '#edd02c']}
-      start={{ x: 0.5, y: 0 }}
-      end={{ x: 0.5, y: 1 }}
-      style={styles.container}
-    >
+    <CoastalGradient style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
@@ -167,7 +162,7 @@ export default function PostDetail() {
           setDeleteTarget(null);
         }}
       />
-    </LinearGradient>
+    </CoastalGradient>
   );
 }
 
