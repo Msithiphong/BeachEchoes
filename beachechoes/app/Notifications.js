@@ -3,6 +3,7 @@ import {
   View, Text, Image, StyleSheet,
   FlatList, TouchableOpacity, ActivityIndicator, Alert,
 } from 'react-native'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useRouter } from 'expo-router'
 import Background from '../components/Background'
 import Header from '../components/Header'
@@ -14,6 +15,7 @@ import { AuthContext } from '../context/AuthContext'
 import { theme } from '../core/theme'
 
 const POLLING_INTERVAL_MS = 30000 // 30 seconds
+const SENT_NOTIFICATIONS_KEY = '@beachechoes:sent_notifications'
 
 /**
  * Maps a notification object to a local notification title and body
@@ -68,8 +70,31 @@ export default function Notifications() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   
-  // Track notification IDs we've already seen to detect new ones
-  const seenNotificationIds = useRef(new Set())
+  // Track notification IDs we've already sent local notifications for
+  const sentNotificationIds = useRef(new Set())
+
+  // Load sent notification IDs from AsyncStorage
+  const loadSentNotificationIds = useCallback(async () => {
+    try {
+      const stored = await AsyncStorage.getItem(SENT_NOTIFICATIONS_KEY)
+      if (stored) {
+        const ids = JSON.parse(stored)
+        sentNotificationIds.current = new Set(ids)
+      }
+    } catch (err) {
+      console.error('Failed to load sent notification IDs:', err)
+    }
+  }, [])
+
+  // Save sent notification IDs to AsyncStorage
+  const saveSentNotificationIds = useCallback(async () => {
+    try {
+      const ids = Array.from(sentNotificationIds.current)
+      await AsyncStorage.setItem(SENT_NOTIFICATIONS_KEY, JSON.stringify(ids))
+    } catch (err) {
+      console.error('Failed to save sent notification IDs:', err)
+    }
+  }, [])
 
   const fetchNotifications = useCallback(async (isRefresh = false) => {
     try {
@@ -82,28 +107,29 @@ export default function Notifications() {
       if (data?.success) {
         const fetchedNotifications = data.notifications ?? []
         
-        // Detect new notifications
-        const newNotifications = fetchedNotifications.filter(
-          (notification) => !seenNotificationIds.current.has(notification.id)
-        )
-        
-        // Trigger local notification for each new notification
-        for (const notification of newNotifications) {
-          const { title, body } = getNotificationContent(notification)
-          
-          try {
-            await scheduleCustomNotification(
-              title,
-              body,
-              { notificationId: notification.id, type: notification.type }
-            )
-          } catch (err) {
-            console.error('Failed to send local notification:', err)
+        // Trigger local notification for each unread notification that hasn't been sent yet
+        for (const notification of fetchedNotifications) {
+          // Only send if unread and not already sent
+          if (!notification.read && !sentNotificationIds.current.has(notification.id)) {
+            const { title, body } = getNotificationContent(notification)
+            
+            try {
+              await scheduleCustomNotification(
+                title,
+                body,
+                { notificationId: notification.id, type: notification.type }
+              )
+              
+              // Mark this notification as sent
+              sentNotificationIds.current.add(notification.id)
+            } catch (err) {
+              console.error('Failed to send local notification:', err)
+            }
           }
-          
-          // Mark this notification as seen
-          seenNotificationIds.current.add(notification.id)
         }
+        
+        // Persist sent notification IDs to AsyncStorage
+        await saveSentNotificationIds()
         
         setNotifications(fetchedNotifications)
       }
@@ -113,7 +139,7 @@ export default function Notifications() {
       setLoading(false)
       if (isRefresh) setRefreshing(false)
     }
-  }, [])
+  }, [saveSentNotificationIds])
 
   useEffect(() => {
     // Request notification permissions on mount
@@ -125,8 +151,14 @@ export default function Notifications() {
       }
     }
     
-    requestNotificationPermissions()
-    fetchNotifications()
+    // Initialize sent notification IDs from AsyncStorage
+    const initialize = async () => {
+      await loadSentNotificationIds()
+      requestNotificationPermissions()
+      fetchNotifications()
+    }
+    
+    initialize()
 
     // Poll for new notifications every 30 seconds
     const interval = setInterval(() => {
@@ -134,7 +166,7 @@ export default function Notifications() {
     }, POLLING_INTERVAL_MS)
 
     return () => clearInterval(interval)
-  }, [fetchNotifications])
+  }, [fetchNotifications, loadSentNotificationIds])
 
   const markAsRead = async (notificationIds) => {
     try {
@@ -332,8 +364,11 @@ export default function Notifications() {
     return null
   }
 
-  // Only count unread notifications of supported types
-  const unreadCount = notifications.filter((n) => ['new_follower', 'post_liked', 'post_expired', 'comment_on_post', 'comment_reply'].includes(n.type) && !n.read).length
+  // Filter to only show unread notifications of supported types
+  const unreadNotifications = notifications.filter(
+    (n) => ['new_follower', 'post_liked', 'post_expired', 'comment_on_post', 'comment_reply'].includes(n.type) && !n.read
+  )
+  const unreadCount = unreadNotifications.length
 
   return (
     <Background>
@@ -343,13 +378,13 @@ export default function Notifications() {
 
       {loading ? (
         <ActivityIndicator size="large" color={theme.colors.primary} />
-      ) : notifications.filter((n) => ['new_follower', 'post_liked', 'post_expired', 'comment_on_post', 'comment_reply'].includes(n.type)).length === 0 ? (
+      ) : unreadNotifications.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>No notifications</Text>
+          <Text style={styles.emptyText}>No unread notifications</Text>
         </View>
       ) : (
         <FlatList
-          data={notifications.filter((n) => ['new_follower', 'post_liked', 'post_expired', 'comment_on_post', 'comment_reply'].includes(n.type))}
+          data={unreadNotifications}
           keyExtractor={(item) => item.id.toString()}
           renderItem={renderNotification}
           style={styles.list}

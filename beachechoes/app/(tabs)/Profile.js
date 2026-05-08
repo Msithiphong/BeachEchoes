@@ -1,7 +1,9 @@
 import React, { useContext, useEffect, useRef, useState } from 'react'
 import { View, Text, StyleSheet, Image, TextInput, Alert,
   TouchableOpacity, ActivityIndicator, Switch, ScrollView,
+  Animated, TouchableWithoutFeedback,
 } from 'react-native'
+import { MaterialIcons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
 import * as ImagePicker from 'expo-image-picker'
 import Background from '../../components/Background'
@@ -18,10 +20,13 @@ import { API_BASE } from '../../config/api'
 import logo from '../../assets/images/logo.png'
 
 export default function Profile() {
-  const { user } = useContext(AuthContext)
+  const { user, logout } = useContext(AuthContext)
   const router = useRouter()
   const scrollRef = useRef(null)
   const echoesYRef = useRef(0)
+
+  const [dropdownVisible, setDropdownVisible] = useState(false)
+  const dropdownAnim = useRef(new Animated.Value(0)).current
 
   const [name, setName] = useState(user?.name || '')
   const [bio, setBio] = useState('')
@@ -165,6 +170,46 @@ export default function Profile() {
     }
   }
 
+  const toggleDropdown = () => {
+    if (dropdownVisible) {
+      // Close animation
+      Animated.timing(dropdownAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }).start(() => setDropdownVisible(false))
+    } else {
+      // Open animation
+      setDropdownVisible(true)
+      Animated.timing(dropdownAnim, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: true,
+      }).start()
+    }
+  }
+
+  const closeDropdown = () => {
+    if (dropdownVisible) {
+      Animated.timing(dropdownAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }).start(() => setDropdownVisible(false))
+    }
+  }
+
+  const handleLogout = async () => {
+    try {
+      closeDropdown()
+      await logout()
+      router.replace('/StartScreen')
+    } catch (error) {
+      console.error('Logout error:', error)
+      Alert.alert('Error', 'Failed to log out')
+    }
+  }
+
   const pickAvatar = async () => {
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync()
@@ -211,12 +256,20 @@ export default function Profile() {
 
   const avatarSize = editing ? 150 : 180
 
-  return (
-    <Background>
-      <Header>{editing ? 'Edit Profile' : 'Profile'}</Header>
+  const dropdownTranslateY = dropdownAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [-10, 0],
+  })
 
-      {/* Make the whole screen scrollable so edit mode never hides controls */}
-      <ScrollView
+  const dropdownOpacity = dropdownAnim
+
+  return (
+    <TouchableWithoutFeedback onPress={closeDropdown}>
+      <View style={{ flex: 1 }}>
+        <Background>
+
+          {/* Make the whole screen scrollable so edit mode never hides controls */}
+          <ScrollView
         ref={scrollRef}
         style={styles.ScrollView}
         contentContainerStyle={styles.container}
@@ -239,6 +292,39 @@ export default function Profile() {
             resizeMode="contain"
             pointerEvents="none"
           />
+
+          {/* Settings Cogwheel - only show when not editing */}
+          {!editing && (
+            <TouchableOpacity 
+              style={styles.settingsButton}
+              onPress={toggleDropdown}
+              activeOpacity={0.7}
+            >
+              <MaterialIcons name="settings" size={28} color="#666" />
+            </TouchableOpacity>
+          )}
+
+          {/* Dropdown Menu */}
+          {dropdownVisible && (
+            <Animated.View
+              style={[
+                styles.dropdown,
+                {
+                  opacity: dropdownOpacity,
+                  transform: [{ translateY: dropdownTranslateY }],
+                },
+              ]}
+            >
+              <TouchableOpacity
+                style={styles.dropdownItem}
+                onPress={handleLogout}
+                activeOpacity={0.7}
+              >
+                <MaterialIcons name="logout" size={20} color="#d32f2f" />
+                <Text style={styles.dropdownText}>Log Out</Text>
+              </TouchableOpacity>
+            </Animated.View>
+          )}
 
           {/* Avatar */}
           <TouchableOpacity onPress={pickAvatar} disabled={uploadingAvatar || saving}>
@@ -384,7 +470,9 @@ export default function Profile() {
         </View>
 
       </ScrollView>
-    </Background>
+        </Background>
+      </View>
+    </TouchableWithoutFeedback>
   )
 }
 
@@ -618,6 +706,49 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#666',
+  },
+
+  settingsButton: {
+    position: 'absolute',
+    top: 16,
+    right: 16,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#f5f5f5',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
+  },
+
+  dropdown: {
+    position: 'absolute',
+    top: 65,
+    right: 16,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 8,
+    minWidth: 160,
+    overflow: 'hidden',
+    zIndex: 20,
+  },
+
+  dropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    gap: 12,
+  },
+
+  dropdownText: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#d32f2f',
   },
 })
 
