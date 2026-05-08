@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { View, ImageBackground, StyleSheet, Text, TouchableOpacity, Animated } from 'react-native'
+import { View, ImageBackground, StyleSheet, Text, TouchableOpacity, Animated, Image } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
 import { auth } from '../config/firebase'
 import { API_BASE } from '../config/api'
@@ -11,6 +11,7 @@ export default function ImageCard({
   image, 
   children, 
   username, 
+  avatarUrl = null,
   ownerFirebaseUid = null,
   onUsernamePress,
   likeCount = 0, 
@@ -216,13 +217,21 @@ export default function ImageCard({
 
             {username && (
               <TouchableOpacity
-                style={[styles.usernameTouchable, DEBUG_IMAGECARD && styles.debugUsernameTouchable]}
+                style={[styles.avatarTouchable, DEBUG_IMAGECARD && styles.debugUsernameTouchable]}
                 onPress={() => {
                   if (ownerFirebaseUid && onUsernamePress) onUsernamePress(ownerFirebaseUid)
                 }}
                 disabled={!ownerFirebaseUid || !onUsernamePress}
               >
-                <Text style={[styles.usernameText, DEBUG_IMAGECARD && styles.debugUsernameText]}>@{username}</Text>
+                <Image
+                  source={{
+                    uri: avatarUrl || 'https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png'
+                  }}
+                  style={[styles.avatarImage, DEBUG_IMAGECARD && styles.debugAvatar]}
+                />
+                <Text style={[styles.usernameText, DEBUG_IMAGECARD && styles.debugUsernameText]}>
+                  {username}
+                </Text>
               </TouchableOpacity>
             )}
 
@@ -303,6 +312,22 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     textDecorationLine: 'underline',
   },
+  avatarTouchable: {
+    position: 'absolute',
+    bottom: 10,
+    left: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  avatarImage: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 2,
+    borderColor: '#ffffff',
+    backgroundColor: '#eee',
+  },
   bigHeart: {
     position: 'absolute',
     alignSelf: 'center',
@@ -367,6 +392,10 @@ const styles = StyleSheet.create({
   debugUsernameText: {
     borderWidth: 1,
     borderColor: '#ffffff', // White for username text
+  },
+  debugAvatar: {
+    borderWidth: 2,
+    borderColor: '#00ff00', // Green for avatar image
   },
   debugLikeContainer: {
     borderWidth: 2,

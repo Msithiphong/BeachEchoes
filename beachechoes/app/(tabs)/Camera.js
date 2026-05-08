@@ -7,6 +7,7 @@ import { View, TouchableOpacity, StyleSheet, Text, ActivityIndicator, Platform }
 import { useRouter } from 'expo-router'
 import { CameraView, useCameraPermissions } from 'expo-camera'
 import * as Location from 'expo-location'
+import { MaterialIcons } from '@expo/vector-icons'
 import BackButton from '../../components/BackButton'
 import { theme } from '../../core/theme'
 import { useDraftPost } from '../../context/DraftPostContext'
@@ -26,6 +27,7 @@ export default function CameraScreen() {
 
   const [isTakingPicture, setIsTakingPicture] = useState(false)
   const [cameraError, setCameraError] = useState(null)
+  const [facing, setFacing] = useState('back')
 
   const {
     setLocalImageUri,
@@ -204,6 +206,7 @@ export default function CameraScreen() {
         <CameraView
           style={styles.camera}
           ref={cameraRef}
+          facing={facing}
           onMountError={(event) => {
             const message = event?.nativeEvent?.message || 'Unknown camera error.'
             setCameraError(message)
@@ -211,6 +214,14 @@ export default function CameraScreen() {
           }}
         />
         <BackButton goBack={() => router.back()} />
+        
+        {/* Flip Camera Button */}
+        <TouchableOpacity
+          style={styles.flipButton}
+          onPress={() => setFacing(current => current === 'back' ? 'front' : 'back')}
+        >
+          <MaterialIcons name="flip-camera-ios" size={32} color="#fff" />
+        </TouchableOpacity>
       </View>
 
       <TouchableOpacity
@@ -281,5 +292,16 @@ const styles = StyleSheet.create({
     height: 60,
     borderRadius: 30,
     backgroundColor: '#fff',
+  },
+  flipButton: {
+    position: 'absolute',
+    top: 60,
+    right: 20,
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 })

@@ -315,6 +315,21 @@ export default function Profile() {
                 },
               ]}
             >
+              {/* Edit Profile button in dropdown (only when not editing) */}
+              {!editing && (
+                <TouchableOpacity
+                  style={styles.dropdownItem}
+                  onPress={() => {
+                    setDropdownVisible(false)
+                    setEditing(true)
+                  }}
+                  activeOpacity={0.7}
+                >
+                  <MaterialIcons name="edit" size={20} color="#333" />
+                  <Text style={[styles.dropdownText, { color: '#333' }]}>Edit Profile</Text>
+                </TouchableOpacity>
+              )}
+              {/* Log Out button */}
               <TouchableOpacity
                 style={styles.dropdownItem}
                 onPress={handleLogout}
@@ -420,14 +435,10 @@ export default function Profile() {
 
         
 
-        {/* Action */}
-        {editing ? (
+        {/* Action: Only show Save Profile button when editing */}
+        {editing && (
           <Button onPress={saveProfile} disabled={saving}>
             {saving ? 'Saving...' : 'Save Profile'}
-          </Button>
-        ) : (
-          <Button onPress={() => setEditing(true)} disabled={saving}>
-            Edit Profile
           </Button>
         )}
 
@@ -479,6 +490,7 @@ export default function Profile() {
 const styles = StyleSheet.create({
   // Scroll container
   container: {
+    marginTop: 40,
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 40,
