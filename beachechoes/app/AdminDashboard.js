@@ -5,7 +5,7 @@ import { signInWithEmailAndPassword } from 'firebase/auth'
 import Background from '../components/Background'
 import Header from '../components/Header'
 import Button from '../components/Button'
-import { requestPermissions, sendLocalNotification } from '../components/Notifications'
+import { requestPermissions, sendLocalNotification } from '../components/LocalNotifications'
 import { auth } from '../config/firebase'
 import { TEST_USER_A, TEST_USER_B, SHOW_ADMIN_TEST_BUTTONS } from '../config/testUsers'
 

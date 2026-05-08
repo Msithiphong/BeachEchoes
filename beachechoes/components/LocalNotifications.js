@@ -77,3 +77,32 @@ export async function sendLocalNotification() {
     trigger: null, 
   });
 }
+
+/**
+ * Schedules a custom local notification with specified title, body, and optional data.
+ * @param {string} title - Notification title
+ * @param {string} body - Notification body text
+ * @param {object} data - Optional data to include with the notification
+ */
+export async function scheduleCustomNotification(title, body, data = {}) {
+  // Simple fallback for web environments
+  if (Platform.OS === 'web') {
+    alert(`${title}: ${body}`);
+    return;
+  }
+
+  try {
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title,
+        body,
+        sound: true,
+        data,
+      },
+      trigger: null, // Send immediately
+    });
+  } catch (err) {
+    console.error('Failed to schedule custom notification:', err);
+    throw err;
+  }
+}

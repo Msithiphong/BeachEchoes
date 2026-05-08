@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useContext, useCallback } from 'react'
+import React, { useEffect, useState, useContext, useCallback, useRef } from 'react'
 import {
   View, Text, Image, StyleSheet,
   FlatList, TouchableOpacity, ActivityIndicator, Alert,
@@ -7,12 +7,58 @@ import { useRouter } from 'expo-router'
 import Background from '../components/Background'
 import Header from '../components/Header'
 import Button from '../components/Button'
+import { requestPermissions, scheduleCustomNotification } from '../components/LocalNotifications'
 import { API_BASE } from '../config/api'
 import { auth } from '../config/firebase'
 import { AuthContext } from '../context/AuthContext'
 import { theme } from '../core/theme'
 
 const POLLING_INTERVAL_MS = 30000 // 30 seconds
+
+/**
+ * Maps a notification object to a local notification title and body
+ */
+function getNotificationContent(notification) {
+  const { type, data } = notification
+
+  switch (type) {
+    case 'post_liked':
+      return {
+        title: data.liker_name || 'Someone',
+        body: 'liked your post',
+      }
+    case 'post_expired':
+      return {
+        title: 'beachechoes',
+        body: 'post expired',
+      }
+    case 'new_follower':
+      return {
+        title: data.from_name || 'Someone',
+        body: 'started following you',
+      }
+    case 'friend_request':
+      return {
+        title: data.from_name || 'Someone',
+        body: 'sent you a friend request',
+      }
+    case 'comment_on_post':
+      return {
+        title: data.from_user_name || 'Someone',
+        body: 'commented on your post',
+      }
+    case 'comment_reply':
+      return {
+        title: data.from_user_name || 'Someone',
+        body: 'replied to your comment',
+      }
+    default:
+      return {
+        title: 'beachechoes',
+        body: 'You have a new notification',
+      }
+  }
+}
 
 export default function Notifications() {
   const router = useRouter()
@@ -21,6 +67,9 @@ export default function Notifications() {
   const [notifications, setNotifications] = useState([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
+  
+  // Track notification IDs we've already seen to detect new ones
+  const seenNotificationIds = useRef(new Set())
 
   const fetchNotifications = useCallback(async (isRefresh = false) => {
     try {
@@ -31,7 +80,32 @@ export default function Notifications() {
       })
       const data = await res.json()
       if (data?.success) {
-        setNotifications(data.notifications ?? [])
+        const fetchedNotifications = data.notifications ?? []
+        
+        // Detect new notifications
+        const newNotifications = fetchedNotifications.filter(
+          (notification) => !seenNotificationIds.current.has(notification.id)
+        )
+        
+        // Trigger local notification for each new notification
+        for (const notification of newNotifications) {
+          const { title, body } = getNotificationContent(notification)
+          
+          try {
+            await scheduleCustomNotification(
+              title,
+              body,
+              { notificationId: notification.id, type: notification.type }
+            )
+          } catch (err) {
+            console.error('Failed to send local notification:', err)
+          }
+          
+          // Mark this notification as seen
+          seenNotificationIds.current.add(notification.id)
+        }
+        
+        setNotifications(fetchedNotifications)
       }
     } catch (err) {
       console.error('Fetch notifications error:', err)
@@ -42,6 +116,16 @@ export default function Notifications() {
   }, [])
 
   useEffect(() => {
+    // Request notification permissions on mount
+    const requestNotificationPermissions = async () => {
+      try {
+        await requestPermissions()
+      } catch (err) {
+        console.error('Failed to request notification permissions:', err)
+      }
+    }
+    
+    requestNotificationPermissions()
     fetchNotifications()
 
     // Poll for new notifications every 30 seconds
