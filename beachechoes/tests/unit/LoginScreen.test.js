@@ -145,49 +145,77 @@ describe('LoginScreen', () => {
   })
 
   it('calls login API with correct credentials on successful validation', async () => {
+    const { signInWithEmailAndPassword } = require('firebase/auth');
+    
+    // Mock Firebase sign in
+    const mockUserCredential = {
+      user: {
+        uid: 'firebase-uid-123',
+        email: 'test@example.com',
+        displayName: 'Test User',
+        getIdToken: jest.fn().mockResolvedValue('mock-id-token')
+      }
+    };
+    signInWithEmailAndPassword.mockResolvedValueOnce(mockUserCredential);
+    
+    // Mock user sync endpoint
     global.fetch.mockResolvedValueOnce({
-      json: async () => ({ success: true, user: { id: 1, email: 'test@example.com' } }),
-    })
+      ok: true,
+      json: async () => ({ success: true, user: { id: 1, firebase_uid: 'firebase-uid-123' } }),
+    });
 
-    const { getByText, getByLabelText } = renderWithContext(<LoginScreen />)
-    const emailInput = getByLabelText('Email')
-    const passwordInput = getByLabelText('Password')
-    const loginButton = getByText('Login')
+    const { getByText, getByLabelText } = renderWithContext(<LoginScreen />);
+    const emailInput = getByLabelText('Email');
+    const passwordInput = getByLabelText('Password');
+    const loginButton = getByText('Login');
 
-    fireEvent.changeText(emailInput, 'test@example.com')
-    fireEvent.changeText(passwordInput, 'password123')
-    fireEvent.press(loginButton)
+    fireEvent.changeText(emailInput, 'test@example.com');
+    fireEvent.changeText(passwordInput, 'password123');
+    fireEvent.press(loginButton);
 
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith('http://localhost:3000/api/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          email: 'test@example.com',
-          password: 'password123',
-        }),
-      })
-    })
-  })
+      expect(signInWithEmailAndPassword).toHaveBeenCalledWith(
+        expect.anything(), // auth object
+        'test@example.com',
+        'password123'
+      );
+    });
+  });
 
   it('navigates to Dashboard on successful login', async () => {
-    const mockUser = { id: 1, email: 'test@example.com' }
+    const { signInWithEmailAndPassword } = require('firebase/auth');
+    
+    // Mock Firebase sign in
+    const mockUserCredential = {
+      user: {
+        uid: 'firebase-uid-123',
+        email: 'test@example.com',
+        displayName: 'Test User',
+        getIdToken: jest.fn().mockResolvedValue('mock-id-token')
+      }
+    };
+    signInWithEmailAndPassword.mockResolvedValueOnce(mockUserCredential);
+    
+    // Mock user sync endpoint
     global.fetch.mockResolvedValueOnce({
-      json: async () => ({ success: true, user: mockUser }),
-    })
+      ok: true,
+      json: async () => ({ success: true, user: { id: 1, firebase_uid: 'firebase-uid-123' } }),
+    });
 
-    const { getByText } = renderWithContext(<LoginScreen />)
-    const loginButton = getByText('Login')
+    const { getByText } = renderWithContext(<LoginScreen />);
+    const loginButton = getByText('Login');
 
-    fireEvent.press(loginButton)
+    fireEvent.press(loginButton);
 
     await waitFor(() => {
-      expect(mockLogin).toHaveBeenCalledWith(mockUser)
-      expect(mockRouter.replace).toHaveBeenCalledWith('/Dashboard')
-    })
-  })
+      expect(mockLogin).toHaveBeenCalledWith({
+        uid: 'firebase-uid-123',
+        email: 'test@example.com',
+        name: 'Test User'
+      });
+      expect(mockRouter.replace).toHaveBeenCalledWith('/Dashboard');
+    });
+  });
 
   it('displays error on failed login', async () => {
     global.fetch.mockResolvedValueOnce({
@@ -275,18 +303,33 @@ describe('LoginScreen', () => {
   })
 
   it('sets loading state during login', async () => {
+    const { signInWithEmailAndPassword } = require('firebase/auth');
+    
+    // Mock Firebase sign in
+    const mockUserCredential = {
+      user: {
+        uid: 'firebase-uid-123',
+        email: 'test@example.com',
+        displayName: 'Test User',
+        getIdToken: jest.fn().mockResolvedValue('mock-id-token')
+      }
+    };
+    signInWithEmailAndPassword.mockResolvedValueOnce(mockUserCredential);
+    
+    // Mock user sync endpoint
     global.fetch.mockResolvedValueOnce({
-      json: async () => ({ success: true, user: {} }),
-    })
+      ok: true,
+      json: async () => ({ success: true, user: { id: 1 } }),
+    });
 
-    const { getByTestId } = renderWithContext(<LoginScreen />)
-    const loginButton = getByTestId('button')
+    const { getByTestId } = renderWithContext(<LoginScreen />);
+    const loginButton = getByTestId('button');
 
-    fireEvent.press(loginButton)
+    fireEvent.press(loginButton);
 
-    // Verify the button was pressed and API was called
+    // Verify the button was pressed and Firebase auth was called
     await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalled()
-    })
-  })
-})
+      expect(signInWithEmailAndPassword).toHaveBeenCalled();
+    });
+  });
+});
