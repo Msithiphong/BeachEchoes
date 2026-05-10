@@ -48,6 +48,59 @@ function formatDateTime(ts) {
   return date.toLocaleDateString();
 }
 
+function dedupeItemsById(items = []) {
+  const seenIds = new Set();
+  return items.filter((item) => {
+    if (!item || item.id === undefined || item.id === null) {
+      return true;
+    }
+
+    const key = String(item.id);
+    if (seenIds.has(key)) {
+      return false;
+    }
+
+    seenIds.add(key);
+    return true;
+  });
+}
+
+function normalizeCommentThread(items = []) {
+  const normalized = [];
+  const commentIndexById = new Map();
+
+  items.forEach((item) => {
+    const replies = dedupeItemsById(item?.replies || []);
+    const nextItem = {
+      ...item,
+      replies,
+    };
+
+    if (!item || item.id === undefined || item.id === null) {
+      normalized.push(nextItem);
+      return;
+    }
+
+    const key = String(item.id);
+    const existingIndex = commentIndexById.get(key);
+
+    if (existingIndex === undefined) {
+      commentIndexById.set(key, normalized.length);
+      normalized.push(nextItem);
+      return;
+    }
+
+    const existingItem = normalized[existingIndex];
+    normalized[existingIndex] = {
+      ...existingItem,
+      ...nextItem,
+      replies: dedupeItemsById([...(existingItem.replies || []), ...replies]),
+    };
+  });
+
+  return normalized;
+}
+
 export default function PostWithComments() {
   const router = useRouter();
   const { postId } = useLocalSearchParams();
@@ -81,7 +134,7 @@ export default function PostWithComments() {
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
       const res = await fetch(`${API_BASE}/posts/detail?ids=${postId}`, { headers });
       const data = await res.json();
-      if (data.success && data.posts.length > 0) {
+      if (data.success && data.posts && data.posts.length > 0) {
         setPost(data.posts[0]);
       }
     } catch (err) {
@@ -93,8 +146,11 @@ export default function PostWithComments() {
   const fetchComments = useCallback(async (cursor = null) => {
     if (!postId) return;
     try {
-      if (!cursor) setLoading(true);
-      else setLoadingMore(true);
+      if (!cursor) {
+        setLoading(true);
+      } else {
+        setLoadingMore(true);
+      }
 
       const token = await auth.currentUser?.getIdToken();
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
@@ -106,12 +162,14 @@ export default function PostWithComments() {
       const data = await res.json();
       
       if (data.success) {
+        const nextComments = Array.isArray(data.comments) ? data.comments : [];
         if (cursor) {
           // Append paginated comments (they already have replies nested)
-          setComments(prev => [...prev, ...data.comments]);
+          setComments(prev => normalizeCommentThread([...prev, ...nextComments]));
         } else {
           // Initial load (comments already have replies nested)
-          setComments(data.comments);
+          setComments(normalizeCommentThread(nextComments));
+          // Replies are collapsed by default for cleaner initial view
         }
         setNextCursor(data.nextCursor);
         setHasMore(data.hasMore);
@@ -125,9 +183,11 @@ export default function PostWithComments() {
   }, [postId]);
 
   useEffect(() => {
+    if (!postId) return;
+
     fetchPost();
     fetchComments();
-  }, [fetchPost, fetchComments]);
+  }, [postId, fetchPost, fetchComments]);
 
   const handleLoadMore = () => {
     if (!loadingMore && hasMore && nextCursor) {
@@ -218,7 +278,7 @@ export default function PostWithComments() {
         // Add new comment or reply
         if (replyTo) {
           // It's a reply - add to parent comment's replies array
-          setComments(prev => prev.map(comment => {
+          setComments(prev => normalizeCommentThread(prev.map(comment => {
             if (comment.id === replyTo.id) {
               return {
                 ...comment,
@@ -226,12 +286,12 @@ export default function PostWithComments() {
               };
             }
             return comment;
-          }));
+          })));
           // Auto-expand the parent comment to show the new reply
           setExpandedReplies(prev => ({ ...prev, [replyTo.id]: true }));
         } else {
           // It's a parent comment - add to top of comments list with empty replies array
-          setComments(prev => [{ ...data.comment, replies: [] }, ...prev]);
+          setComments(prev => normalizeCommentThread([{ ...data.comment, replies: [] }, ...prev]));
         }
         setCommentText('');
         setReplyTo(null);
@@ -274,13 +334,13 @@ export default function PostWithComments() {
                   
                   // If it wasn't removed (meaning it's a reply), remove it from parent's replies
                   if (filtered.length === prev.length) {
-                    return prev.map(comment => ({
+                    return normalizeCommentThread(prev.map(comment => ({
                       ...comment,
                       replies: comment.replies?.filter(r => r.id !== commentId) || []
-                    }));
+                    })));
                   }
                   
-                  return filtered;
+                  return normalizeCommentThread(filtered);
                 });
               } else {
                 Alert.alert('Error', data.error || 'Failed to delete comment');
@@ -384,7 +444,7 @@ export default function PostWithComments() {
           const replyEdited = reply.edited_at ? ' (edited)' : '';
 
           return (
-            <View key={reply.id} style={styles.replyCard}>
+            <View key={String(reply.id)} style={styles.replyCard}>
               <View style={styles.commentHeader}>
                 <TouchableOpacity
                   onPress={() => reply.firebase_uid && router.push(`/profile/${reply.firebase_uid}`)}

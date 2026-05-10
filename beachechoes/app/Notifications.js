@@ -12,7 +12,8 @@ import { auth } from '../config/firebase'
 import { AuthContext } from '../context/AuthContext'
 import { theme } from '../core/theme'
 
-const POLLING_INTERVAL_MS = 5000 // 5 seconds
+// Use shorter polling interval for tests, longer for production
+const POLLING_INTERVAL_MS = process.env.NODE_ENV === 'test' ? 200 : 5000
 
 export default function Notifications() {
   const router = useRouter()
@@ -45,7 +46,7 @@ export default function Notifications() {
     // Fetch notifications on mount
     fetchNotifications()
 
-    // Poll for new notifications every 5 seconds
+    // Poll for new notifications
     const interval = setInterval(() => {
       fetchNotifications(true)
     }, POLLING_INTERVAL_MS)
@@ -83,8 +84,8 @@ export default function Notifications() {
 
     // Navigate based on type
     if (notification.type === 'friend_request') {
-      // Navigate to accept/decline screen or show inline actions
-      // For now, we'll handle friend requests inline
+      // Don't navigate for friend requests - handle inline with buttons
+      return
     } else if (notification.type === 'post_liked') {
       // Navigate to the post detail or user profile
       router.push(`/PostWithComments?postId=${notification.data.post_id}`)
@@ -101,10 +102,128 @@ export default function Notifications() {
     }
   }
 
+  const handleAcceptFriendRequest = async (notification) => {
+    try {
+      const token = await auth.currentUser?.getIdToken()
+      const res = await fetch(`${API_BASE}/friendships/accept`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ friend_firebase_uid: notification.data.from_firebase_uid }),
+      })
+      
+      if (res.ok) {
+        // Remove the notification from the list
+        setNotifications((prev) => prev.filter((n) => n.id !== notification.id))
+      } else {
+        Alert.alert('Error', 'Failed to accept friend request')
+      }
+    } catch (err) {
+      console.error('Accept friend request error:', err)
+      Alert.alert('Error', 'Failed to accept friend request')
+    }
+  }
+
+  const handleDeclineFriendRequest = async (notification) => {
+    try {
+      const token = await auth.currentUser?.getIdToken()
+      const res = await fetch(`${API_BASE}/friendships/decline`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ friend_firebase_uid: notification.data.from_firebase_uid }),
+      })
+      
+      if (res.ok) {
+        // Remove the notification from the list
+        setNotifications((prev) => prev.filter((n) => n.id !== notification.id))
+      } else {
+        Alert.alert('Error', 'Failed to decline friend request')
+      }
+    } catch (err) {
+      console.error('Decline friend request error:', err)
+      Alert.alert('Error', 'Failed to decline friend request')
+    }
+  }
+
 
 
   const renderNotification = ({ item }) => {
     const isUnread = !item.read
+
+    // Render friend request notifications
+    if (item.type === 'friend_request') {
+      // Check if this is an accepted notification
+      if (item.data.accepted) {
+        return (
+          <TouchableOpacity
+            style={[styles.card, isUnread && styles.unreadCard]}
+            onPress={() => handleNotificationPress(item)}
+          >
+            <View style={styles.userInfo}>
+              <Image
+                source={{
+                  uri:
+                    item.data.from_avatar_url ||
+                    'https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png',
+                }}
+                style={styles.avatar}
+              />
+              <View style={styles.nameContainer}>
+                <Text style={styles.userName}>{item.data.from_user_name}</Text>
+                <Text style={styles.subtitle}>Accepted your friend request</Text>
+                <Text style={styles.timeText}>
+                  {new Date(item.created_at).toLocaleDateString()}
+                </Text>
+              </View>
+            </View>
+            {isUnread && <View style={styles.unreadDot} />}
+          </TouchableOpacity>
+        )
+      }
+
+      // Render pending friend request with Accept/Decline buttons
+      return (
+        <View style={[styles.card, isUnread && styles.unreadCard]}>
+          <View style={styles.userInfo}>
+            <Image
+              source={{
+                uri:
+                  item.data.from_avatar_url ||
+                  'https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png',
+              }}
+              style={styles.avatar}
+            />
+            <View style={styles.nameContainer}>
+              <Text style={styles.userName}>{item.data.from_user_name}</Text>
+              <Text style={styles.subtitle}>Sent you a friend request</Text>
+              <Text style={styles.timeText}>
+                {new Date(item.created_at).toLocaleDateString()}
+              </Text>
+            </View>
+          </View>
+          <View style={styles.actionButtons}>
+            <TouchableOpacity
+              style={[styles.actionButton, styles.acceptButton]}
+              onPress={() => handleAcceptFriendRequest(item)}
+            >
+              <Text style={styles.acceptButtonText}>Accept</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.actionButton, styles.declineButton]}
+              onPress={() => handleDeclineFriendRequest(item)}
+            >
+              <Text style={styles.declineButtonText}>Decline</Text>
+            </TouchableOpacity>
+          </View>
+          {isUnread && <View style={styles.unreadDot} />}
+        </View>
+      )
+    }
 
     // Only render 'new_follower', 'post_liked', and 'post_expired' notifications
     if (item.type === 'new_follower') {
@@ -123,7 +242,7 @@ export default function Notifications() {
               style={styles.avatar}
             />
             <View style={styles.nameContainer}>
-              <Text style={styles.userName}>{item.data.from_name}</Text>
+              <Text style={styles.userName}>{item.data.from_user_name || item.data.from_name}</Text>
               <Text style={styles.subtitle}>Started following you</Text>
               <Text style={styles.timeText}>
                 {new Date(item.created_at).toLocaleDateString()}
@@ -145,13 +264,13 @@ export default function Notifications() {
             <Image
               source={{
                 uri:
-                  item.data.liker_avatar_url ||
+                  item.data.from_avatar_url || item.data.liker_avatar_url ||
                   'https://upload.wikimedia.org/wikipedia/commons/7/7c/Profile_avatar_placeholder_large.png',
               }}
               style={styles.avatar}
             />
             <View style={styles.nameContainer}>
-              <Text style={styles.userName}>{item.data.liker_name}</Text>
+              <Text style={styles.userName}>{item.data.from_user_name || item.data.liker_name}</Text>
               <Text style={styles.subtitle}>Liked your post</Text>
               <Text style={styles.timeText}>
                 {new Date(item.created_at).toLocaleDateString()}
@@ -251,7 +370,7 @@ export default function Notifications() {
 
   // Filter to only show unread notifications of supported types
   const unreadNotifications = notifications.filter(
-    (n) => ['new_follower', 'post_liked', 'post_expired', 'comment_on_post', 'comment_reply'].includes(n.type) && !n.read
+    (n) => ['new_follower', 'post_liked', 'post_expired', 'comment_on_post', 'comment_reply', 'friend_request'].includes(n.type) && !n.read
   )
   const unreadCount = unreadNotifications.length
 
@@ -358,6 +477,37 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: '#aaa',
     marginTop: 4,
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 12,
+  },
+  actionButton: {
+    flex: 1,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  acceptButton: {
+    backgroundColor: theme.colors.primary,
+  },
+  acceptButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  declineButton: {
+    backgroundColor: '#f0f0f0',
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  declineButtonText: {
+    color: '#666',
+    fontWeight: '600',
+    fontSize: 14,
   },
   // ...existing code...
   emptyContainer: {

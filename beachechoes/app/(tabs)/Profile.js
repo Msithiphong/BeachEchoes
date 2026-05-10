@@ -22,7 +22,7 @@ import logo from '../../assets/images/logo.png'
 
 export default function Profile() {
   const { isDark, toggleTheme } = useAppTheme()
-  const { user, logout } = useContext(AuthContext)
+  const { user, logout, loading: authLoading } = useContext(AuthContext)
   const router = useRouter()
   const scrollRef = useRef(null)
   const echoesYRef = useRef(0)
@@ -48,6 +48,13 @@ export default function Profile() {
   const [loading, setLoading] = useState(true)
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const [saving, setSaving] = useState(false)
+
+  // Redirect unauthenticated users to StartScreen
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.replace('/StartScreen')
+    }
+  }, [user, authLoading, router])
 
   useEffect(() => {
     fetchProfile()

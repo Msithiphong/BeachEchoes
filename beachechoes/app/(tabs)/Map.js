@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react'
+import React, { useEffect, useState, useCallback, useRef, useContext } from 'react'
 import {
   View,
   Text,
@@ -18,11 +18,13 @@ import { POST_CATEGORIES } from '../../config/postCategories'
 import CoastalGradient from '../../components/CoastalGradient'
 import WaveRefreshOverlay from '../../components/WaveRefreshOverlay'
 import { useAppTheme } from '../../context/AppThemeContext'
+import { AuthContext } from '../../context/AuthContext'
 
 const CATEGORY_FILTERS = ['All', ...POST_CATEGORIES, 'Muted']
 
 export default function MapScreen() {
   const { isDark } = useAppTheme()
+  const { user, loading: authLoading } = useContext(AuthContext)
   const router = useRouter()
 
   const [posts, setPosts] = useState([])
@@ -32,6 +34,13 @@ export default function MapScreen() {
   const [error, setError] = useState(null)
   const [selectedCategory, setSelectedCategory] = useState('All')
   const waveRef = useRef(null)
+
+  // Redirect unauthenticated users to StartScreen
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.replace('/StartScreen')
+    }
+  }, [user, authLoading, router])
 
   const fetchPosts = useCallback(async (withWave = false) => {
     if (withWave) {

@@ -271,16 +271,16 @@ app.get('/api/profile/:userId', async (req, res) => {
       SELECT COUNT(*)::int AS count FROM posts WHERE user_id = ${neonId} AND is_deleted = FALSE
     `
 
-    // Following = people this user follows
+    // Following = people this user follows (only accepted)
     const followingResult = await sql`
       SELECT COUNT(*)::int AS count FROM friendships
-      WHERE user_id = ${neonId}
+      WHERE user_id = ${neonId} AND status = 'accepted'
     `
 
-    // Followers = people who follow this user
+    // Followers = people who follow this user (only accepted)
     const followersResult = await sql`
       SELECT COUNT(*)::int AS count FROM friendships
-      WHERE friend_id = ${neonId}
+      WHERE friend_id = ${neonId} AND status = 'accepted'
     `
 
     profile.echoes_count = echoesResult[0]?.count ?? 0
@@ -371,6 +371,7 @@ const NOTIFICATION_TYPES = {
   POST_LIKED: 'post_liked',
   POST_EXPIRED: 'post_expired',
   NEW_FOLLOWER: 'new_follower',
+  FRIEND_REQUEST: 'friend_request',
   COMMENT_ON_POST: 'comment_on_post',
   COMMENT_REPLY: 'comment_reply'
 }
@@ -480,31 +481,52 @@ app.get('/api/friendships/status/:friendUid', requireFirebaseAuth, async (req, r
     const friendId = await resolveUserId(req.params.friendUid)
 
     if (!myId || !friendId) {
-      return res.json({ success: true, relationship: 'none' })
+      return res.json({ success: true, status: 'none' })
     }
 
     // Check if viewing own profile
     if (myId === friendId) {
-      return res.json({ success: true, relationship: 'self' })
+      return res.json({ success: true, status: 'self' })
     }
 
-    // Check for relationship from me (auth user) to them (target user) only
-    const rows = await sql`
-      SELECT 1
+    // Check for outgoing request/relationship (I follow them)
+    const outgoing = await sql`
+      SELECT status
       FROM friendships
       WHERE user_id = ${myId} AND friend_id = ${friendId}
     `
 
-    const relationship = rows.length ? 'following' : 'none'
+    // Check for incoming request (they follow me)
+    const incoming = await sql`
+      SELECT status
+      FROM friendships
+      WHERE user_id = ${friendId} AND friend_id = ${myId}
+    `
 
-    res.json({ success: true, relationship })
+    // Determine status based on outgoing/incoming relationships
+    if (outgoing.length > 0) {
+      const outgoingStatus = outgoing[0].status
+      if (outgoingStatus === 'accepted') {
+        return res.json({ success: true, status: 'following' })
+      } else if (outgoingStatus === 'pending') {
+        return res.json({ success: true, status: 'requested' })
+      } else if (outgoingStatus === 'declined') {
+        return res.json({ success: true, status: 'declined' })
+      }
+    }
+
+    if (incoming.length > 0 && incoming[0].status === 'pending') {
+      return res.json({ success: true, status: 'incoming_request' })
+    }
+
+    res.json({ success: true, status: 'none' })
   } catch (error) {
     console.error('Friendship status error:', error)
     res.status(500).json({ success: false, error: 'Internal server error' })
   }
 })
 
-// POST follow (instant follow without approval)
+// POST follow - sends friend request with pending status
 app.post('/api/friendships/follow', requireFirebaseAuth, async (req, res) => {
   try {
     const { friendUid } = req.body
@@ -522,33 +544,128 @@ app.post('/api/friendships/follow', requireFirebaseAuth, async (req, res) => {
       return res.status(400).json({ success: false, error: 'Cannot follow yourself' })
     }
 
-    // Insert friendship (instant follow, no approval needed)
+    // Insert friendship with pending status
     const insertResult = await sql`
-      INSERT INTO friendships (user_id, friend_id, created_at, updated_at)
-      VALUES (${myId}, ${friendId}, NOW(), NOW())
-      ON CONFLICT (user_id, friend_id) DO NOTHING
-      RETURNING user_id, (xmax = 0) AS inserted
+      INSERT INTO friendships (user_id, friend_id, status, created_at, updated_at)
+      VALUES (${myId}, ${friendId}, 'pending', NOW(), NOW())
+      ON CONFLICT (user_id, friend_id) DO UPDATE
+      SET status = 'pending', updated_at = NOW()
+      RETURNING user_id, friend_id
     `
 
-    // Create notification for the target user if this is a new follow
-    if (insertResult.length > 0 && insertResult[0].inserted) {
+    // Create friend request notification for the target user
+    if (insertResult.length > 0) {
       const senderInfo = await sql`
-        SELECT name, avatar_url FROM users WHERE user_id = ${myId}
+        SELECT name, avatar_url, firebase_uid FROM users WHERE user_id = ${myId}
       `
       
       if (senderInfo.length > 0) {
-        await createNotification(friendId, NOTIFICATION_TYPES.NEW_FOLLOWER, {
+        await createNotification(friendId, NOTIFICATION_TYPES.FRIEND_REQUEST, {
           from_user_id: myId,
-          from_firebase_uid: req.firebase.uid,
-          from_name: senderInfo[0].name || 'Someone',
+          from_firebase_uid: senderInfo[0].firebase_uid,
+          from_user_name: senderInfo[0].name || 'Someone',
           from_avatar_url: senderInfo[0].avatar_url || null
         }, myId)
       }
     }
 
-    res.json({ success: true })
+    res.json({ success: true, status: 'pending' })
   } catch (error) {
     console.error('Follow error:', error)
+    res.status(500).json({ success: false, error: 'Internal server error' })
+  }
+})
+
+// PUT accept friend request
+app.put('/api/friendships/accept', requireFirebaseAuth, async (req, res) => {
+  try {
+    const { friend_firebase_uid } = req.body
+    if (!friend_firebase_uid) {
+      return res.status(400).json({ success: false, error: 'friend_firebase_uid is required' })
+    }
+
+    const myId = await resolveUserId(req.firebase.uid)
+    const friendId = await resolveUserId(friend_firebase_uid)
+
+    if (!myId || !friendId) {
+      return res.status(404).json({ success: false, error: 'User not found' })
+    }
+
+    // Update the friendship status from pending to accepted
+    const updateResult = await sql`
+      UPDATE friendships
+      SET status = 'accepted', updated_at = NOW()
+      WHERE user_id = ${friendId} AND friend_id = ${myId} AND status = 'pending'
+      RETURNING user_id, friend_id
+    `
+
+    if (updateResult.length === 0) {
+      return res.status(404).json({ success: false, error: 'Friend request not found' })
+    }
+
+    // Create notification for the requester that their request was accepted
+    const accepterInfo = await sql`
+      SELECT name, avatar_url, firebase_uid FROM users WHERE user_id = ${myId}
+    `
+
+    if (accepterInfo.length > 0) {
+      await createNotification(friendId, NOTIFICATION_TYPES.FRIEND_REQUEST, {
+        from_user_name: accepterInfo[0].name || 'Someone',
+        from_firebase_uid: accepterInfo[0].firebase_uid,
+        from_avatar_url: accepterInfo[0].avatar_url || null,
+        accepted: true
+      }, myId)
+    }
+
+    // Mark the original friend request notification as read
+    await sql`
+      UPDATE notifications
+      SET read = TRUE
+      WHERE user_id = ${myId} 
+        AND type = 'friend_request'
+        AND (data->>'from_firebase_uid')::text = ${friend_firebase_uid}
+    `
+
+    res.json({ success: true })
+  } catch (error) {
+    console.error('Accept friend request error:', error)
+    res.status(500).json({ success: false, error: 'Internal server error' })
+  }
+})
+
+// PUT decline friend request
+app.put('/api/friendships/decline', requireFirebaseAuth, async (req, res) => {
+  try {
+    const { friend_firebase_uid } = req.body
+    if (!friend_firebase_uid) {
+      return res.status(400).json({ success: false, error: 'friend_firebase_uid is required' })
+    }
+
+    const myId = await resolveUserId(req.firebase.uid)
+    const friendId = await resolveUserId(friend_firebase_uid)
+
+    if (!myId || !friendId) {
+      return res.status(404).json({ success: false, error: 'User not found' })
+    }
+
+    // Delete the pending friend request
+    await sql`
+      DELETE FROM friendships
+      WHERE user_id = ${friendId} AND friend_id = ${myId} AND status = 'pending'
+    `
+
+    // Remove the friend request notification
+    await sql`
+      DELETE FROM notifications
+      WHERE user_id = ${myId}
+        AND type = 'friend_request'
+        AND (data->>'from_firebase_uid')::text = ${friend_firebase_uid}
+        AND (data->>'accepted') IS NULL
+    `
+
+    res.json({ success: true })
+  } catch (error) {
+    console.error('Decline friend request error:', error)
     res.status(500).json({ success: false, error: 'Internal server error' })
   }
 })
@@ -627,12 +744,12 @@ app.get('/api/friendships/following/:firebaseUid', async (req, res) => {
     const userId = await resolveUserId(uid)
     if (!userId) return res.json({ success: true, users: [] })
 
-    // Get all users where user_id = this user (they follow others)
+    // Get all users where user_id = this user (they follow others, only accepted)
     const rows = await sql`
       SELECT u.firebase_uid, u.name, u.avatar_url
       FROM friendships f
       JOIN users u ON u.user_id = f.friend_id
-      WHERE f.user_id = ${userId}
+      WHERE f.user_id = ${userId} AND f.status = 'accepted'
       ORDER BY u.name ASC
     `
     res.json({ success: true, users: rows })
@@ -649,12 +766,12 @@ app.get('/api/friendships/followers/:firebaseUid', async (req, res) => {
     const userId = await resolveUserId(uid)
     if (!userId) return res.json({ success: true, users: [] })
 
-    // Get all users where friend_id = this user (others follow them)
+    // Get all users where friend_id = this user (others follow them, only accepted)
     const rows = await sql`
       SELECT u.firebase_uid, u.name, u.avatar_url
       FROM friendships f
       JOIN users u ON u.user_id = f.user_id
-      WHERE f.friend_id = ${userId}
+      WHERE f.friend_id = ${userId} AND f.status = 'accepted'
       ORDER BY u.name ASC
     `
     res.json({ success: true, users: rows })
@@ -1402,6 +1519,7 @@ app.get('/api/posts/user/:userId', async (req, res) => {
 })
 
 // GET /api/posts/detail?ids=1,2,3 — posts for a tapped cluster, newest first
+// MUST come before /api/posts/:id to avoid :id matching "detail"
 app.get('/api/posts/detail', async (req, res) => {
   try {
     const raw = String(req.query.ids || '')
@@ -1415,10 +1533,13 @@ app.get('/api/posts/detail', async (req, res) => {
     const viewerUserId = await resolveViewerUserId(req)
     const includeMuted = String(req.query.includeMuted || '0') === '1'
     const hasAnonymousColumn = await ensurePostsAnonymousColumnKnown()
-    const rows = hasAnonymousColumn
+    
+    // Fetch posts without muting filter (apply muting in JS like /api/posts/map does)
+    let rows = hasAnonymousColumn
       ? await sql`
           SELECT
             p.id,
+            p.user_id,
             p.image_url,
             p.overlay_text,
             p.category,
@@ -1441,30 +1562,12 @@ app.get('/api/posts/detail', async (req, res) => {
           WHERE p.id = ANY(${ids})
             AND p.is_deleted = FALSE
             AND p.created_at >= NOW() - ${POST_TTL_INTERVAL}::interval
-            AND (
-              ${viewerUserId}::int IS NULL
-              OR (
-                ${includeMuted}
-                AND p.user_id IN (
-                  SELECT muted_user_id
-                  FROM user_mutes
-                  WHERE muter_user_id = ${viewerUserId}::int
-                )
-              )
-              OR (
-                ${!includeMuted}
-                AND p.user_id NOT IN (
-                  SELECT muted_user_id
-                  FROM user_mutes
-                  WHERE muter_user_id = ${viewerUserId}::int
-                )
-              )
-            )
           ORDER BY p.created_at DESC
         `
       : await sql`
           SELECT
             p.id,
+            p.user_id,
             p.image_url,
             p.overlay_text,
             p.category,
@@ -1487,30 +1590,106 @@ app.get('/api/posts/detail', async (req, res) => {
           WHERE p.id = ANY(${ids})
             AND p.is_deleted = FALSE
             AND p.created_at >= NOW() - ${POST_TTL_INTERVAL}::interval
-            AND (
-              ${viewerUserId}::int IS NULL
-              OR (
-                ${includeMuted}
-                AND p.user_id IN (
-                  SELECT muted_user_id
-                  FROM user_mutes
-                  WHERE muter_user_id = ${viewerUserId}::int
-                )
-              )
-              OR (
-                ${!includeMuted}
-                AND p.user_id NOT IN (
-                  SELECT muted_user_id
-                  FROM user_mutes
-                  WHERE muter_user_id = ${viewerUserId}::int
-                )
-              )
-            )
           ORDER BY p.created_at DESC
         `
+    
+    // Apply muting filter in JavaScript (same pattern as /api/posts/map)
+    if (viewerUserId) {
+      const mutedUsers = await sql`
+        SELECT muted_user_id FROM user_mutes WHERE muter_user_id = ${viewerUserId}::int
+      `
+      const mutedIds = new Set(mutedUsers.map(u => u.muted_user_id))
+      
+      if (includeMuted) {
+        // Show only posts from muted users
+        rows = rows.filter(p => mutedIds.has(p.user_id))
+      } else {
+        // Show only posts from non-muted users
+        rows = rows.filter(p => !mutedIds.has(p.user_id))
+      }
+    }
+    
     res.json({ success: true, posts: rows })
   } catch (err) {
     console.error('GET /api/posts/detail error:', err)
+    res.status(500).json({ success: false, error: 'Internal server error' })
+  }
+})
+
+// GET /api/posts/:id — get a single post by ID
+app.get('/api/posts/:id', async (req, res) => {
+  try {
+    const postId = parseInt(req.params.id, 10)
+    if (isNaN(postId)) {
+      return res.status(400).json({ success: false, error: 'Invalid post ID' })
+    }
+
+    const viewerUserId = await resolveViewerUserId(req)
+    const hasAnonymousColumn = await ensurePostsAnonymousColumnKnown()
+    
+    const rows = hasAnonymousColumn
+      ? await sql`
+          SELECT
+            p.id,
+            p.image_url,
+            p.overlay_text,
+            p.category,
+            p.is_anonymous,
+            p.map_x,
+            p.map_y,
+            p.created_at,
+            p.created_at + ${POST_TTL_INTERVAL}::interval AS expires_at,
+            COALESCE(p.comment_count, 0)::int AS comment_count,
+            COALESCE(l.like_count, 0)::int AS like_count,
+            EXISTS(SELECT 1 FROM post_likes WHERE post_id = p.id AND user_id = ${viewerUserId}::int) AS liked,
+            CASE WHEN p.is_anonymous THEN 'Anonymous' ELSE u.name END AS username,
+            CASE WHEN p.is_anonymous THEN NULL ELSE u.firebase_uid END AS owner_firebase_uid
+          FROM posts p
+          LEFT JOIN users u ON u.user_id = p.user_id
+          LEFT JOIN (
+            SELECT post_id, COUNT(*)::int AS like_count
+            FROM post_likes
+            GROUP BY post_id
+          ) l ON l.post_id = p.id
+          WHERE p.id = ${postId}
+            AND p.is_deleted = FALSE
+            AND p.created_at >= NOW() - ${POST_TTL_INTERVAL}::interval
+        `
+      : await sql`
+          SELECT
+            p.id,
+            p.image_url,
+            p.overlay_text,
+            p.category,
+            FALSE AS is_anonymous,
+            p.map_x,
+            p.map_y,
+            p.created_at,
+            p.created_at + ${POST_TTL_INTERVAL}::interval AS expires_at,
+            COALESCE(p.comment_count, 0)::int AS comment_count,
+            COALESCE(l.like_count, 0)::int AS like_count,
+            EXISTS(SELECT 1 FROM post_likes WHERE post_id = p.id AND user_id = ${viewerUserId}::int) AS liked,
+            u.name AS username,
+            u.firebase_uid AS owner_firebase_uid
+          FROM posts p
+          LEFT JOIN users u ON u.user_id = p.user_id
+          LEFT JOIN (
+            SELECT post_id, COUNT(*)::int AS like_count
+            FROM post_likes
+            GROUP BY post_id
+          ) l ON l.post_id = p.id
+          WHERE p.id = ${postId}
+            AND p.is_deleted = FALSE
+            AND p.created_at >= NOW() - ${POST_TTL_INTERVAL}::interval
+        `
+    
+    if (!rows.length) {
+      return res.status(404).json({ success: false, error: 'Post not found' })
+    }
+
+    res.json(rows[0])
+  } catch (err) {
+    console.error('GET /api/posts/:id error:', err)
     res.status(500).json({ success: false, error: 'Internal server error' })
   }
 })
