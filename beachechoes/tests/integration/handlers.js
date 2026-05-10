@@ -38,6 +38,20 @@ const handlers = [
     }));
   }),
 
+  rest.get(`${API_BASE}/api/posts/muted`, (req, res, ctx) => {
+    return res(ctx.json({
+      success: true,
+      posts: [],
+    }));
+  }),
+
+  rest.get(`${API_BASE}/api/posts/hidden`, (req, res, ctx) => {
+    return res(ctx.json({
+      success: true,
+      posts: [],
+    }));
+  }),
+
   rest.get(`${API_BASE}/api/posts/detail`, (req, res, ctx) => {
     return res(ctx.json({
       success: true,
@@ -84,6 +98,13 @@ const handlers = [
   rest.delete(`${API_BASE}/api/posts/:id`, (req, res, ctx) => {
     return res(ctx.json({
       success: true,
+    }));
+  }),
+
+  rest.put(`${API_BASE}/api/posts/:id/hide`, (req, res, ctx) => {
+    return res(ctx.json({
+      success: true,
+      hidden: true,
     }));
   }),
 

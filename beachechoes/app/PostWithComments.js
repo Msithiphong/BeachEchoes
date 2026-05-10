@@ -103,7 +103,7 @@ function normalizeCommentThread(items = []) {
 
 export default function PostWithComments() {
   const router = useRouter();
-  const { postId } = useLocalSearchParams();
+  const { postId, includeMuted, includeHidden } = useLocalSearchParams();
   const { user } = useContext(AuthContext);
 
   const [post, setPost] = useState(null);
@@ -132,7 +132,10 @@ export default function PostWithComments() {
     try {
       const token = await auth.currentUser?.getIdToken();
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
-      const res = await fetch(`${API_BASE}/posts/detail?ids=${postId}`, { headers });
+      const params = new URLSearchParams({ ids: String(postId) });
+      if (includeMuted === '1') params.set('includeMuted', '1');
+      if (includeHidden === '1') params.set('includeHidden', '1');
+      const res = await fetch(`${API_BASE}/posts/detail?${params.toString()}`, { headers });
       const data = await res.json();
       if (data.success && data.posts && data.posts.length > 0) {
         setPost(data.posts[0]);
@@ -140,7 +143,7 @@ export default function PostWithComments() {
     } catch (err) {
       console.error('Fetch post error:', err);
     }
-  }, [postId]);
+  }, [postId, includeMuted, includeHidden]);
 
   // Fetch comments
   const fetchComments = useCallback(async (cursor = null) => {
@@ -202,6 +205,44 @@ export default function PostWithComments() {
         onPress: () => router.back(),
       },
     ]);
+  };
+
+  const handleHideToggle = async () => {
+    if (!post?.id || !user) return;
+
+    const nextHidden = includeHidden !== '1';
+
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch(`${API_BASE}/posts/${post.id}/hide`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ hidden: nextHidden }),
+      });
+      const data = await res.json();
+
+      if (!data?.success) {
+        throw new Error(data?.error || 'Failed to update hidden status');
+      }
+
+      const title = nextHidden ? 'Post Hidden' : 'Post Unhidden';
+      const message = nextHidden
+        ? 'This post is now in your Hidden posts.'
+        : 'This post is visible again.'
+
+      Alert.alert(title, message, [
+        {
+          text: 'OK',
+          onPress: () => router.back(),
+        },
+      ]);
+    } catch (err) {
+      console.error('Hide toggle error:', err);
+      Alert.alert('Error', 'Failed to update hidden status');
+    }
   };
 
   const handlePickImage = async () => {
@@ -490,6 +531,7 @@ export default function PostWithComments() {
     if (!post) return null;
 
     const createdLabel = formatDateTime(post.created_at);
+    const isHiddenView = includeHidden === '1' || post.hidden === true;
     const usernameLabel = post.username || 'Anonymous';
     const canOpenProfile = Boolean(post.owner_firebase_uid);
 
@@ -524,6 +566,22 @@ export default function PostWithComments() {
             initialLiked={false}
           />
           <View style={styles.footerActions}>
+            {user && (
+              <TouchableOpacity
+                onPress={handleHideToggle}
+                style={styles.actionLabelBtn}
+                accessibilityLabel={isHiddenView ? 'Unhide post' : 'Hide post'}
+              >
+                <MaterialIcons
+                  name={isHiddenView ? 'visibility' : 'visibility-off'}
+                  size={20}
+                  color="#64748b"
+                />
+                <Text style={styles.actionLabelText}>
+                  {isHiddenView ? 'Unhide' : 'Hide'}
+                </Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity onPress={() => setReportTarget(post.id)} style={styles.iconBtn}>
               <MaterialIcons name="flag" size={20} color="#888" />
             </TouchableOpacity>
@@ -740,6 +798,17 @@ const styles = StyleSheet.create({
   },
   iconBtn: {
     padding: 4,
+  },
+  actionLabelBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    padding: 4,
+  },
+  actionLabelText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748b',
   },
   commentsHeaderDivider: {
     borderTopWidth: 1,

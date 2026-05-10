@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
+  Alert,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
@@ -28,7 +29,7 @@ function formatDateTime(ts) {
 
 export default function PostDetail() {
   const router = useRouter();
-  const { ids, includeMuted } = useLocalSearchParams(); // comma-separated post IDs
+  const { ids, includeMuted, includeHidden } = useLocalSearchParams(); // comma-separated post IDs
   const { user } = useContext(AuthContext);
 
   const [posts, setPosts] = useState([]);
@@ -45,6 +46,7 @@ export default function PostDetail() {
       const params = new URLSearchParams();
       params.set('ids', ids);
       if (includeMuted === '1') params.set('includeMuted', '1');
+      if (includeHidden === '1') params.set('includeHidden', '1');
       const res = await fetch(`${API_BASE}/posts/detail?${params.toString()}`, { headers });
       const data = await res.json();
       if (data.success) setPosts(data.posts);
@@ -53,7 +55,7 @@ export default function PostDetail() {
     } finally {
       setLoading(false);
     }
-  }, [ids, includeMuted]);
+  }, [ids, includeMuted, includeHidden]);
 
   useEffect(() => { fetchPosts(); }, [fetchPosts]);
 
@@ -61,8 +63,35 @@ export default function PostDetail() {
     setPosts((prev) => prev.filter((p) => p.id !== postId));
   }
 
+  async function handleHideToggle(postId, hidden) {
+    if (!user) return;
+
+    try {
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch(`${API_BASE}/posts/${postId}/hide`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ hidden }),
+      });
+      const data = await res.json();
+
+      if (!data?.success) {
+        throw new Error(data?.error || 'Failed to update hidden status');
+      }
+
+      setPosts((prev) => prev.filter((post) => post.id !== postId));
+    } catch (err) {
+      console.error('Post hide toggle error:', err);
+      Alert.alert('Error', 'Failed to update hidden status');
+    }
+  }
+
   function renderItem({ item }) {
     const isOwner = user?.uid && item.owner_firebase_uid === user.uid;
+    const isHiddenView = includeHidden === '1' || item.hidden === true;
     const createdLabel = formatDateTime(item.created_at);
     const expiresLabel = formatDateTime(item.expires_at);
     const usernameLabel = item.username || 'Anonymous';
@@ -99,13 +128,35 @@ export default function PostDetail() {
           />
           <View style={styles.footerActions}>
             <TouchableOpacity
-              onPress={() => router.push(`/PostWithComments?postId=${item.id}`)}
+              onPress={() => router.push({
+                pathname: '/PostWithComments',
+                params: {
+                  postId: String(item.id),
+                  ...(includeMuted === '1' ? { includeMuted: '1' } : {}),
+                  ...(includeHidden === '1' ? { includeHidden: '1' } : {}),
+                },
+              })}
               style={styles.iconBtn}
+              accessibilityLabel="Open comments"
             >
               <MaterialIcons name="comment" size={20} color="#888" />
               {item.comment_count > 0 && (
                 <Text style={styles.commentCount}>{item.comment_count}</Text>
               )}
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => handleHideToggle(item.id, !isHiddenView)}
+              style={styles.actionLabelBtn}
+              accessibilityLabel={isHiddenView ? 'Unhide post' : 'Hide post'}
+            >
+              <MaterialIcons
+                name={isHiddenView ? 'visibility' : 'visibility-off'}
+                size={20}
+                color="#64748b"
+              />
+              <Text style={styles.actionLabelText}>
+                {isHiddenView ? 'Unhide' : 'Hide'}
+              </Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={() => setReportTarget(item.id)} style={styles.iconBtn}>
               <MaterialIcons name="flag" size={20} color="#888" />
@@ -258,6 +309,17 @@ const styles = StyleSheet.create({
   },
   footerActions: { flexDirection: 'row', gap: 8 },
   iconBtn: { padding: 4, position: 'relative' },
+  actionLabelBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    padding: 4,
+  },
+  actionLabelText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#64748b',
+  },
   commentCount: {
     position: 'absolute',
     top: -4,

@@ -1,16 +1,21 @@
 import React from 'react';
+import { Alert } from 'react-native';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import PostWithComments from '../../app/PostWithComments';
 import { AuthContext } from '../../context/AuthContext';
 import { auth } from '../../config/firebase';
 
 // Mock expo-router
+const mockPush = jest.fn();
+const mockBack = jest.fn();
+let mockSearchParams = { postId: '123' };
+
 jest.mock('expo-router', () => ({
   useRouter: jest.fn(() => ({
-    push: jest.fn(),
-    back: jest.fn(),
+    push: mockPush,
+    back: mockBack,
   })),
-  useLocalSearchParams: jest.fn(() => ({ postId: '123' })),
+  useLocalSearchParams: jest.fn(() => mockSearchParams),
   Stack: {
     Screen: () => null,
   },
@@ -82,6 +87,12 @@ describe('PostWithComments (Module Level)', () => {
     jest.clearAllMocks();
     auth.currentUser.getIdToken.mockResolvedValue('mock-token');
     global.fetch = jest.fn();
+    mockSearchParams = { postId: '123' };
+    jest.spyOn(Alert, 'alert').mockImplementation((title, message, buttons) => {
+      if (Array.isArray(buttons) && buttons[0]?.onPress) {
+        buttons[0].onPress();
+      }
+    });
   });
 
   const renderWithContext = (component) => {
@@ -340,6 +351,93 @@ describe('PostWithComments (Module Level)', () => {
     await waitFor(() => {
       expect(queryAllByText('Duplicate reply should appear once')).toHaveLength(1);
     }, { timeout: 3000 });
+  });
+
+  it('renders a hide action and navigates back after hiding a post', async () => {
+    const mockPost = {
+      success: true,
+      posts: [
+        {
+          id: 123,
+          image_url: 'https://example.com/image.jpg',
+          overlay_text: 'Hide me',
+          like_count: 10,
+          username: 'Alice',
+          owner_firebase_uid: 'user456',
+          hidden: false,
+        },
+      ],
+    };
+
+    global.fetch
+      .mockResolvedValueOnce({ ok: true, json: async () => mockPost })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ success: true, comments: [] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ success: true, hidden: true }) });
+
+    const { getByText } = renderWithContext(<PostWithComments />);
+
+    await waitFor(() => {
+      expect(getByText('Hide')).toBeTruthy();
+    }, { timeout: 3000 });
+
+    fireEvent.press(getByText('Hide'));
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/posts/123/hide',
+        expect.objectContaining({
+          method: 'PUT',
+          body: JSON.stringify({ hidden: true }),
+          headers: expect.objectContaining({
+            'Content-Type': 'application/json',
+            Authorization: 'Bearer mock-token',
+          }),
+        })
+      );
+      expect(Alert.alert).toHaveBeenCalledWith(
+        'Post Hidden',
+        'This post is now in your Hidden posts.',
+        expect.any(Array)
+      );
+      expect(mockBack).toHaveBeenCalled();
+    }, { timeout: 3000 });
+  });
+
+  it('keeps hidden posts visible in hidden mode and switches the action to Unhide', async () => {
+    mockSearchParams = { postId: '123', includeHidden: '1' };
+
+    const mockPost = {
+      success: true,
+      posts: [
+        {
+          id: 123,
+          image_url: 'https://example.com/image.jpg',
+          overlay_text: 'Still visible while hidden',
+          like_count: 10,
+          username: 'Alice',
+          owner_firebase_uid: 'user456',
+          hidden: true,
+        },
+      ],
+    };
+
+    global.fetch
+      .mockResolvedValueOnce({ ok: true, json: async () => mockPost })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ success: true, comments: [] }) });
+
+    const { getByText } = renderWithContext(<PostWithComments />);
+
+    await waitFor(() => {
+      expect(getByText('Still visible while hidden')).toBeTruthy();
+      expect(getByText('Unhide')).toBeTruthy();
+    }, { timeout: 3000 });
+
+    expect(global.fetch).toHaveBeenCalledWith(
+      'http://localhost:3000/api/posts/detail?ids=123&includeHidden=1',
+      expect.objectContaining({
+        headers: { Authorization: 'Bearer mock-token' },
+      })
+    );
   });
 
   it('handles API errors gracefully', async () => {

@@ -7,7 +7,7 @@ import {
   ScrollView,
   TouchableOpacity,
 } from 'react-native'
-import { useRouter } from 'expo-router'
+import { useFocusEffect, useRouter } from 'expo-router'
 
 import { API_BASE } from '../../config/api'
 import { auth } from '../../config/firebase'
@@ -20,7 +20,7 @@ import WaveRefreshOverlay from '../../components/WaveRefreshOverlay'
 import { useAppTheme } from '../../context/AppThemeContext'
 import { AuthContext } from '../../context/AuthContext'
 
-const CATEGORY_FILTERS = ['All', ...POST_CATEGORIES, 'Muted']
+const CATEGORY_FILTERS = ['All', ...POST_CATEGORIES, 'Muted', 'Hidden']
 
 export default function MapScreen() {
   const { isDark } = useAppTheme()
@@ -30,6 +30,7 @@ export default function MapScreen() {
   const [posts, setPosts] = useState([])
   const [clusters, setClusters] = useState([])
   const [mutedPostCount, setMutedPostCount] = useState(0)
+  const [hiddenPostCount, setHiddenPostCount] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [selectedCategory, setSelectedCategory] = useState('All')
@@ -52,22 +53,25 @@ export default function MapScreen() {
     try {
       const token = await auth.currentUser?.getIdToken()
       const headers = token ? { Authorization: `Bearer ${token}` } : {}
+      const emptyResponse = { success: true, posts: [] }
+      const fetchPostsJson = async (url) => {
+        const res = await fetch(url, { headers })
+        return res.json()
+      }
 
-      const mutedFetchPromise = token
-        ? fetch(`${API_BASE}/posts/muted`, { headers })
-        : Promise.resolve({
-            ok: true,
-            json: async () => ({ success: true, posts: [] }),
-          })
+      const mutedDataPromise = token
+        ? fetchPostsJson(`${API_BASE}/posts/muted`)
+        : Promise.resolve(emptyResponse)
 
-      const activePostsFetchPromise =
+      const hiddenDataPromise = token
+        ? fetchPostsJson(`${API_BASE}/posts/hidden`)
+        : Promise.resolve(emptyResponse)
+
+      const activePostsDataPromise =
         selectedCategory === 'Muted'
-          ? token
-            ? fetch(`${API_BASE}/posts/muted`, { headers })
-            : Promise.resolve({
-                ok: true,
-                json: async () => ({ success: true, posts: [] }),
-              })
+          ? mutedDataPromise
+          : selectedCategory === 'Hidden'
+            ? hiddenDataPromise
           : (() => {
               const params = new URLSearchParams()
 
@@ -78,17 +82,13 @@ export default function MapScreen() {
               const query = params.toString()
               const categoryParam = query ? `?${query}` : ''
 
-              return fetch(`${API_BASE}/posts/map${categoryParam}`, { headers })
+              return fetchPostsJson(`${API_BASE}/posts/map${categoryParam}`)
             })()
 
-      const [res, mutedRes] = await Promise.all([
-        activePostsFetchPromise,
-        mutedFetchPromise,
-      ])
-
-      const [data, mutedData] = await Promise.all([
-        res.json(),
-        mutedRes.json(),
+      const [data, mutedData, hiddenData] = await Promise.all([
+        activePostsDataPromise,
+        mutedDataPromise,
+        hiddenDataPromise,
       ])
 
       if (data?.success) {
@@ -98,6 +98,9 @@ export default function MapScreen() {
         setClusters(clusterPosts(nextPosts))
         setMutedPostCount(
           mutedData?.success ? (mutedData.posts ?? []).length : 0
+        )
+        setHiddenPostCount(
+          hiddenData?.success ? (hiddenData.posts ?? []).length : 0
         )
       } else {
         setError(data?.error || 'Could not load posts.')
@@ -110,9 +113,9 @@ export default function MapScreen() {
     }
   }, [selectedCategory])
 
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     fetchPosts(false)
-  }, [fetchPosts])
+  }, [fetchPosts]))
 
   function handlePinPress(ids) {
     router.push({
@@ -120,6 +123,7 @@ export default function MapScreen() {
       params: {
         ids: ids.join(','),
         includeMuted: selectedCategory === 'Muted' ? '1' : '0',
+        includeHidden: selectedCategory === 'Hidden' ? '1' : '0',
       },
     })
   }
@@ -144,7 +148,11 @@ export default function MapScreen() {
           {CATEGORY_FILTERS.map(category => {
             const active = category === selectedCategory
             const label =
-              category === 'Muted' ? `Muted (${mutedPostCount})` : category
+              category === 'Muted'
+                ? `Muted (${mutedPostCount})`
+                : category === 'Hidden'
+                  ? `Hidden (${hiddenPostCount})`
+                  : category
 
             return (
               <TouchableOpacity

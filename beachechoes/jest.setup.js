@@ -34,6 +34,10 @@ jest.mock('expo-router', () => ({
     back: jest.fn(),
   }),
   useLocalSearchParams: () => ({}),
+  useFocusEffect: (callback) => {
+    const React = require('react');
+    React.useEffect(() => callback(), [callback]);
+  },
   Link: 'Link',
   Redirect: 'Redirect',
   Stack: {

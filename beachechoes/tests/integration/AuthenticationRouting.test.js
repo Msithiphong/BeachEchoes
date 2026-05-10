@@ -16,6 +16,10 @@ const mockPush = jest.fn();
 const mockReplace = jest.fn();
 
 jest.mock('expo-router', () => ({
+  useFocusEffect: jest.fn((callback) => {
+    const React = require('react');
+    React.useEffect(() => callback(), [callback]);
+  }),
   useRouter: jest.fn(() => ({
     push: mockPush,
     replace: mockReplace,
