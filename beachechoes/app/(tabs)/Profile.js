@@ -1,6 +1,6 @@
 import React, { useContext, useEffect, useRef, useState } from 'react'
 import { View, Text, StyleSheet, Image, TextInput, Alert,
-  TouchableOpacity, ActivityIndicator, Switch, ScrollView,
+  TouchableOpacity, ActivityIndicator, ScrollView,
 } from 'react-native'
 import { MaterialIcons } from '@expo/vector-icons'
 import { useRouter } from 'expo-router'
@@ -32,9 +32,6 @@ export default function Profile() {
   const [name, setName] = useState(user?.name || '')
   const [bio, setBio] = useState('')
   const [avatarUrl, setAvatarUrl] = useState(null)
-
-  const [anonymousEchoes, setAnonymousEchoes] = useState(false)
-
 
   const [neonUserId, setNeonUserId] = useState(null)
   const [posts, setPosts] = useState([])
@@ -73,16 +70,6 @@ export default function Profile() {
         setEchoesCount(data.profile.echoes_count ?? 0)
         setFollowingCount(data.profile.following_count ?? 0)
         setFollowersCount(data.profile.followers_count ?? 0)
-
-        const pref =
-          data.profile.anonymous_echoes ??
-          data.profile.anonymousEchoes ??
-          data.profile.anonymous_echoes_enabled ??
-          false
-
-        setAnonymousEchoes(!!pref)
-
-
 
         // Store neon user_id and fetch posts
         if (data.profile.id) {
@@ -136,7 +123,6 @@ export default function Profile() {
 
         // recommended keys
         avatar_url: avatarUrl,
-        anonymous_echoes: anonymousEchoes,
       }
 
       const res = await fetch(`${API_BASE}/profile/${user.uid}`, {
@@ -387,23 +373,6 @@ export default function Profile() {
             <Text style={[styles.bioText, isDark ? styles.textSoftWhite : styles.textSoftDark]}>{bio || 'No bio yet'}</Text>
           )}
 
-          {/* Toggles only in edit mode */}
-          {editing && (
-            <>
-              <View style={styles.toggleRow}>
-                <View style={styles.toggleTextCol}>
-                  <Text style={styles.toggleTitle}>Post Echoes anonymously</Text>
-                  <Text style={styles.toggleSubtitle}>
-                    When enabled, your username will not show on new Echoes.
-                  </Text>
-                </View>
-
-                <Switch value={anonymousEchoes} onValueChange={setAnonymousEchoes} disabled={saving} />
-              </View>
-
-
-            </>
-          )}
         </View>
 
         {/* Stats (FORCED same width as card) */}
@@ -604,34 +573,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
 
-  toggleRow: {
-    marginTop: 16,
-    width: '100%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.52)',
-  },
-
-  toggleTextCol: {
-    flex: 1,
-    paddingRight: 12,
-  },
-
-  toggleTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 4,
-  },
-
-  toggleSubtitle: {
-    fontSize: 13,
-    color: '#254a62',
-  },
-
   // Stats: same width as card + centered content
   statsCard: {
     width: '100%',
@@ -811,4 +752,3 @@ const styles = StyleSheet.create({
     color: 'rgba(8, 48, 75, 0.82)',
   },
 })
-

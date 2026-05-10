@@ -1,6 +1,7 @@
 import React from 'react';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
 import { PaperProvider } from 'react-native-paper';
+import { Switch } from 'react-native';
 import Profile from '../../app/(tabs)/Profile';
 import { AuthContext } from '../../context/AuthContext';
 import { auth } from '../../config/firebase';
@@ -130,7 +131,6 @@ describe('Profile (Module Level)', () => {
         echoes_count: 15,
         following_count: 30,
         followers_count: 25,
-        anonymous_echoes: false,
       },
     };
 
@@ -248,7 +248,7 @@ describe('Profile (Module Level)', () => {
     });
   });
 
-  it('displays edit mode when edit button is pressed', async () => {
+  it('enters edit mode without showing anonymous toggle controls', async () => {
     const mockProfile = {
       success: true,
       profile: {
@@ -262,14 +262,29 @@ describe('Profile (Module Level)', () => {
       .mockResolvedValueOnce({ json: async () => mockProfile })
       .mockResolvedValueOnce({ json: async () => ({ success: true, posts: [] }) });
 
-    const { getByText, getByDisplayValue } = renderWithContext(<Profile />);
+    const { getByDisplayValue, getByTestId, getByText, queryByText, UNSAFE_queryAllByType } =
+      renderWithContext(<Profile />);
 
     await waitFor(() => {
       expect(getByText('Test User')).toBeTruthy();
     });
 
-    // Find and press edit button (implementation may vary)
-    // This is a simplified test - actual implementation would need to match component structure
+    fireEvent.press(getByTestId('profile-settings-button'));
+
+    await waitFor(() => {
+      expect(getByText('Edit Profile')).toBeTruthy();
+    });
+
+    fireEvent.press(getByText('Edit Profile'));
+
+    await waitFor(() => {
+      expect(getByDisplayValue('Test User')).toBeTruthy();
+      expect(getByDisplayValue('My bio')).toBeTruthy();
+      expect(getByText('Save Profile')).toBeTruthy();
+    });
+
+    expect(queryByText('Post Echoes anonymously')).toBeNull();
+    expect(UNSAFE_queryAllByType(Switch)).toHaveLength(0);
   });
 
   it('opens the settings menu, shows actions, and closes after selecting theme toggle', async () => {
