@@ -1,5 +1,6 @@
 import React from 'react';
 import { render, waitFor } from '@testing-library/react-native';
+import { PaperProvider } from 'react-native-paper';
 import { server } from './server';
 import { rest } from 'msw';
 import Dashboard from '../../app/(tabs)/Dashboard';
@@ -208,14 +209,18 @@ describe('Authentication and Protected Route Enforcement (Integration Level)', (
 
   const { ScrollContext } = require('../../context/ScrollContext');
 
-  const renderWithAuth = (component, user = null, loading = false) => {
-    return render(
+  const wrapWithProviders = (component, user = null, loading = false) => (
+    <PaperProvider>
       <ScrollContext.Provider value={{ scrollHandler: jest.fn(), navbarHeight: 0 }}>
         <AuthContext.Provider value={{ user, loading, logout: jest.fn() }}>
           {component}
         </AuthContext.Provider>
       </ScrollContext.Provider>
-    );
+    </PaperProvider>
+  );
+
+  const renderWithAuth = (component, user = null, loading = false) => {
+    return render(wrapWithProviders(component, user, loading));
   };
 
   it('redirects unauthenticated user from Dashboard to StartScreen', async () => {
@@ -398,9 +403,7 @@ describe('Authentication and Protected Route Enforcement (Integration Level)', (
 
     // Test Profile
     rerenderDashboard(
-      <AuthContext.Provider value={{ user: mockUser, loading: false, logout: jest.fn() }}>
-        <Profile />
-      </AuthContext.Provider>
+      wrapWithProviders(<Profile />, mockUser, false)
     );
 
     await waitFor(() => {
@@ -409,9 +412,7 @@ describe('Authentication and Protected Route Enforcement (Integration Level)', (
 
     // Test Map
     rerenderDashboard(
-      <AuthContext.Provider value={{ user: mockUser, loading: false, logout: jest.fn() }}>
-        <Map />
-      </AuthContext.Provider>
+      wrapWithProviders(<Map />, mockUser, false)
     );
 
     await waitFor(() => {

@@ -1,5 +1,6 @@
 import React from 'react';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
+import { PaperProvider } from 'react-native-paper';
 import Profile from '../../app/(tabs)/Profile';
 import { AuthContext } from '../../context/AuthContext';
 import { auth } from '../../config/firebase';
@@ -80,10 +81,12 @@ jest.mock('../../helpers/avatarUpload', () => ({
   uploadAvatar: jest.fn(),
 }));
 
+const mockToggleTheme = jest.fn();
+
 jest.mock('../../context/AppThemeContext', () => ({
   useAppTheme: jest.fn(() => ({
     isDark: false,
-    toggleTheme: jest.fn(),
+    toggleTheme: mockToggleTheme,
   })),
 }));
 
@@ -96,18 +99,23 @@ describe('Profile (Module Level)', () => {
     email: 'test@example.com',
     name: 'Test User',
   };
+  const mockLogout = jest.fn();
 
   beforeEach(() => {
     jest.clearAllMocks();
+    mockToggleTheme.mockClear();
+    mockLogout.mockClear();
     auth.currentUser.getIdToken.mockResolvedValue('mock-token');
     global.fetch = jest.fn();
   });
 
   const renderWithContext = (component) => {
     return render(
-      <AuthContext.Provider value={{ user: mockUser, logout: jest.fn() }}>
-        {component}
-      </AuthContext.Provider>
+      <PaperProvider>
+        <AuthContext.Provider value={{ user: mockUser, logout: mockLogout, loading: false }}>
+          {component}
+        </AuthContext.Provider>
+      </PaperProvider>
     );
   };
 
@@ -167,7 +175,9 @@ describe('Profile (Module Level)', () => {
       },
     };
 
-    global.fetch.mockResolvedValueOnce({ json: async () => mockProfile });
+    global.fetch
+      .mockResolvedValueOnce({ json: async () => mockProfile })
+      .mockResolvedValueOnce({ json: async () => ({ success: true, posts: [] }) });
 
     const { getByText } = renderWithContext(<Profile />);
 
@@ -248,7 +258,9 @@ describe('Profile (Module Level)', () => {
       },
     };
 
-    global.fetch.mockResolvedValueOnce({ json: async () => mockProfile });
+    global.fetch
+      .mockResolvedValueOnce({ json: async () => mockProfile })
+      .mockResolvedValueOnce({ json: async () => ({ success: true, posts: [] }) });
 
     const { getByText, getByDisplayValue } = renderWithContext(<Profile />);
 
@@ -258,6 +270,44 @@ describe('Profile (Module Level)', () => {
 
     // Find and press edit button (implementation may vary)
     // This is a simplified test - actual implementation would need to match component structure
+  });
+
+  it('opens the settings menu, shows actions, and closes after selecting theme toggle', async () => {
+    const mockProfile = {
+      success: true,
+      profile: {
+        id: 1,
+        name: 'Test User',
+        bio: 'Menu test bio',
+      },
+    };
+
+    global.fetch
+      .mockResolvedValueOnce({ json: async () => mockProfile })
+      .mockResolvedValueOnce({ json: async () => ({ success: true, posts: [] }) });
+
+    const { getByTestId, getByText, queryByText } = renderWithContext(<Profile />);
+
+    await waitFor(() => {
+      expect(getByText('Test User')).toBeTruthy();
+    });
+
+    fireEvent.press(getByTestId('profile-settings-button'));
+
+    await waitFor(() => {
+      expect(getByText('Edit Profile')).toBeTruthy();
+      expect(getByText('Dark Mode')).toBeTruthy();
+      expect(getByText('Log Out')).toBeTruthy();
+    });
+
+    fireEvent.press(getByText('Dark Mode'));
+
+    await waitFor(() => {
+      expect(mockToggleTheme).toHaveBeenCalledTimes(1);
+      expect(queryByText('Edit Profile')).toBeNull();
+    });
+
+    expect(getByText('Menu test bio')).toBeTruthy();
   });
 
   it('updates profile when save is pressed in edit mode', async () => {
@@ -272,6 +322,7 @@ describe('Profile (Module Level)', () => {
 
     global.fetch
       .mockResolvedValueOnce({ json: async () => mockProfile })
+      .mockResolvedValueOnce({ json: async () => ({ success: true, posts: [] }) })
       .mockResolvedValueOnce({ json: async () => ({ success: true }) });
 
     const { getByText } = renderWithContext(<Profile />);
