@@ -1,3 +1,4 @@
+// Internal moderation surface for filtering feed posts and inspecting attached reports.
 import React, { useEffect, useMemo, useState } from 'react'
 import {
   View,
@@ -76,6 +77,7 @@ export default function Moderation() {
       const category = String(post.category || '').toLowerCase()
       const reports = getReports(post)
 
+      // Fold report metadata into search so moderators can find posts by complaint content too.
       const reportText = reports
         .map((report) => `${report.reason || ''} ${report.details || ''}`)
         .join(' ')

@@ -35,6 +35,7 @@ export const TEST_USER_B = {
 
 /**
  * Flag to show admin test buttons in UI
+ * Keeps quick sign-in helpers gated behind explicit dev/test intent.
  * @type {boolean}
  */
 export const SHOW_ADMIN_TEST_BUTTONS = process.env.EXPO_PUBLIC_SHOW_ADMIN_TEST_BUTTONS === 'true'

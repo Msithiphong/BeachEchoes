@@ -3,8 +3,7 @@ import { BottomNavigation } from 'react-native-paper'
 import { useRouter, usePathname } from 'expo-router'
 import MaterialIcons from '@expo/vector-icons/MaterialIcons'
 
-
-
+// Bottom tab shell that keeps React Native Paper navigation in sync with Expo Router paths.
 export default function NavigationBar() {
   const router = useRouter()
   const pathname = usePathname()

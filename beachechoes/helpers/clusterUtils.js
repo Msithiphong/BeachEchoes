@@ -57,6 +57,7 @@ export function clusterPosts(posts, threshold = CLUSTER_THRESHOLD) {
     const postY = typeof post.map_y === 'string' ? parseFloat(post.map_y) : post.map_y;
     
     let placed = false;
+    // Compare against current centroids instead of every post for a lightweight O(n * clusters) pass.
     for (const cluster of clusters) {
       const dx = postX - cluster.centroid.x;
       const dy = postY - cluster.centroid.y;

@@ -1,3 +1,4 @@
+// Default MSW fixtures for integration tests; individual specs override these selectively.
 const { rest } = require('msw');
 
 const API_BASE = 'http://localhost:3000';

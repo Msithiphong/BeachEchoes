@@ -1,3 +1,4 @@
+// Covers report reason selection, validation, and API submission for the report sheet.
 import React from 'react';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
 import { Alert } from 'react-native';

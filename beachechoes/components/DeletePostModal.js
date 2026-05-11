@@ -1,3 +1,4 @@
+// Confirmation modal for destructive post deletion requests.
 import React, { useState } from 'react';
 import {
   Modal,
@@ -25,6 +26,7 @@ export default function DeletePostModal({ visible, postId, onClose, onDeleted })
       });
       const data = await res.json();
       if (data.success) {
+        // Notify the parent first so list/detail screens can remove the deleted post locally.
         onDeleted?.();
         onClose();
       } else {

@@ -1,3 +1,4 @@
+// Interactive campus map that supports tap selection, pinch zoom, and programmatic centering.
 import React, { useState, useRef, useImperativeHandle, forwardRef } from 'react'
 import {
   View,
@@ -53,6 +54,7 @@ function CampusMap({ onTap, children, style }, ref) {
   function handleLayout(e) {
     const { width } = e.nativeEvent.layout
 
+    // Derive height from the source image ratio so normalized coordinates stay trustworthy.
     setDimensions({
       width,
       height: width / MAP_ASPECT_RATIO,
@@ -197,6 +199,7 @@ function CampusMap({ onTap, children, style }, ref) {
                       {children
                         ? React.Children.map(children, child =>
                             child
+                              // Child pins render in normalized coordinates, so pass current scaled size down.
                               ? React.cloneElement(child, {
                                   mapWidth: scaledWidth,
                                   mapHeight: scaledHeight,

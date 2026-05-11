@@ -1,3 +1,4 @@
+// Covers destructive modal behavior, API wiring, and loading/error states for delete flows.
 import React from 'react';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
 import { Alert } from 'react-native';

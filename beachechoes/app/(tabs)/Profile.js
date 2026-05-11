@@ -1,3 +1,4 @@
+// Authenticated profile hub for editing the current user and browsing their posts.
 import React, { useContext, useEffect, useRef, useState } from 'react'
 import { View, Text, StyleSheet, Image, TextInput, Alert,
   TouchableOpacity, ActivityIndicator, ScrollView,
@@ -71,7 +72,7 @@ export default function Profile() {
         setFollowingCount(data.profile.following_count ?? 0)
         setFollowersCount(data.profile.followers_count ?? 0)
 
-        // Store neon user_id and fetch posts
+        // Backend profile data carries the Neon user_id needed by the posts endpoint.
         if (data.profile.id) {
           setNeonUserId(data.profile.id)
           await fetchPosts(data.profile.id)
@@ -116,7 +117,7 @@ export default function Profile() {
       const token = await auth.currentUser?.getIdToken()
 
       const payload = {
-        // legacy keys (keep for compatibility)
+        // Keep legacy keys until every backend consumer reads only snake_case.
         name,
         bio,
         avatarUrl,
@@ -157,7 +158,7 @@ export default function Profile() {
   // Navigate to the selected user's profile (or stay on Profile tab if it's the current user)
   const handleSelectUser = (item) => {
     if (item.id === user?.uid) {
-      // Already on own profile, do nothing or scroll to top
+      // Re-selecting yourself behaves like a convenient "scroll back to top".
       scrollRef.current?.scrollTo({ y: 0, animated: true })
     } else {
       router.push(`/profile/${item.id}`)

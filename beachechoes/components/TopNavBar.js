@@ -9,6 +9,7 @@ import { auth } from '../config/firebase'
 
 export const NAVBAR_HEIGHT = 38
 
+// Lightweight polling keeps the badge fresh even while the notifications screen is closed.
 const NOTIFICATION_POLL_INTERVAL_MS = 5000 // 5 seconds
 
 export default function TopNavBar({ translateY }) {
@@ -26,6 +27,7 @@ export default function TopNavBar({ translateY }) {
       })
       const data = await res.json()
       if (data?.success) {
+        // The badge counts unread items client-side to stay compatible with older payloads.
         const count = data.notifications.filter((n) => !n.read).length
         setUnreadCount(count)
       }

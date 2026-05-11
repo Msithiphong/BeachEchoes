@@ -1,3 +1,4 @@
+// Module-level checks for leaderboard fetching, rendering, and empty/error states.
 import React from 'react';
 import { render, waitFor } from '@testing-library/react-native';
 import Leaderboard from '../../app/(tabs)/Leaderboard';

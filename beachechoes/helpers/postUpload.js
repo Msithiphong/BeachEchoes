@@ -27,6 +27,7 @@ export async function publishPost({ localImageUri, overlayText, category, isAnon
   const response = await fetch(localImageUri);
   const blob = await response.blob();
 
+  // Wrap FileReader so the camera file can be reused by the JSON/base64 backend upload flow.
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onloadend = async () => {

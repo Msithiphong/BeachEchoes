@@ -1,3 +1,4 @@
+// Map placement step that lets the user pick a campus location or reuse current GPS.
 import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
@@ -67,6 +68,7 @@ export default function MapPlacement() {
     let mapCoords = normalized;
 
     if (!pointInPolygon(normalized)) {
+      // Keep the pin on campus even when GPS drifts slightly outside the polygon.
       mapCoords = snapToPolygonBoundary(normalized);
     }
 
@@ -260,6 +262,7 @@ export default function MapPlacement() {
   }
 
   function handlePublish() {
+    // Manual map taps override GPS so the user stays in control of final placement.
     const finalCoords = pin || youAreHereCoords;
 
     if (!finalCoords) {

@@ -2,6 +2,8 @@ import React from 'react'
 import { Platform, StyleSheet } from 'react-native'
 import { Text } from 'react-native-paper'
 import { useAppTheme } from '../context/AppThemeContext'
+
+// Reuse one title treatment while still adapting text color to light/dark mode.
 export default function Header(props) {
   const { isDark } = useAppTheme()
   return <Text style={[styles.header, isDark ? styles.textWhite : styles.textDark]} {...props} />

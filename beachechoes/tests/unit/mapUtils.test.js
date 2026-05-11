@@ -1,3 +1,4 @@
+// Protects both tap normalization math and calibrated GPS-to-map conversion output bounds.
 import { tapToNormalized, latLngToNormalized } from '../../helpers/mapUtils';
 
 describe('mapUtils', () => {

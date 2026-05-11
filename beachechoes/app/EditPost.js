@@ -1,3 +1,4 @@
+// Post composition step for caption/category/anonymous settings before map placement.
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -54,6 +55,7 @@ export default function EditPost() {
   }
 
   function handleContinue() {
+    // Save the trimmed draft so later steps always read normalized compose state.
     setOverlayText(text.trim());
     setCategory(selectedCategory);
     router.push('/MapPlacement');

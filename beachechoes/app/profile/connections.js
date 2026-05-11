@@ -30,6 +30,7 @@ export default function Connections() {
 
   const fetchConnections = async () => {
     try {
+      // The endpoint switches between follower/following lists based on the route query.
       const endpoint = type === 'followers' ? 'followers' : 'following'
       const res = await fetch(`${API_BASE}/friendships/${endpoint}/${encodeURIComponent(userId)}`)
       const data = await res.json()

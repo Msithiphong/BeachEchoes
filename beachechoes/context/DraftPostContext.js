@@ -1,3 +1,4 @@
+// Shared draft state lets the capture, edit, placement, and publish steps act like one flow.
 import React, { createContext, useContext, useState } from 'react';
 import { DEFAULT_POST_CATEGORY } from '../config/postCategories';
 
@@ -19,6 +20,7 @@ export function DraftPostProvider({ children }) {
   const [userMapY, setUserMapY] = useState(null);
   const [locationPermissionGranted, setLocationPermissionGranted] = useState(false);
 
+  // Reset per-post data after publish/cancel while leaving permission state intact.
   function clearDraft() {
     setLocalImageUri(null);
     setOverlayText('');

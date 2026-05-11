@@ -1,3 +1,4 @@
+// Integration coverage for like counts staying consistent across simulated users.
 import React from 'react';
 import { render, waitFor, fireEvent } from '@testing-library/react-native';
 import { server } from './server';

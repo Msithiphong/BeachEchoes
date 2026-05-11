@@ -1,3 +1,4 @@
+// Integration scenarios for friend request delivery and notification actions.
 import React from 'react';
 import { render, waitFor, fireEvent } from '@testing-library/react-native';
 import { server } from './server';

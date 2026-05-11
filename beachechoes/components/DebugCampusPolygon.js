@@ -8,6 +8,7 @@ import { VALID_CAMPUS_POLYGON } from '../config/campusMap';
  * This component is for debugging purposes only and should be removed when no longer needed.
  * 
  * Controlled by EXPO_PUBLIC_DEBUG_SHOW_CAMPUS_POLYGON environment variable.
+ * Uses the same shared polygon constants as runtime placement validation.
  * 
  * @param {number} mapWidth - Current width of the map in pixels
  * @param {number} mapHeight - Current height of the map in pixels

@@ -1,3 +1,4 @@
+// Integration scenarios for comment trees, replies, and thread data wiring via MSW.
 import React from 'react';
 import { render, waitFor } from '@testing-library/react-native';
 import { server } from './server';

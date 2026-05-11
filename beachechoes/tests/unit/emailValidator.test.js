@@ -1,3 +1,4 @@
+// Keeps the auth email validator contract intentionally small and easy to reason about.
 import { emailValidator } from '../../helpers/emailValidator'
 
 describe('emailValidator', () => {

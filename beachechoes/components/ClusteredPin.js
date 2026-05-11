@@ -1,3 +1,4 @@
+// Absolute-positioned marker for one clustered map location and its post count.
 import React from 'react'
 import { TouchableOpacity, Text, View, StyleSheet } from 'react-native'
 
@@ -41,6 +42,7 @@ export default function ClusteredPin({
 
   const left = x * mapWidth - PIN_RADIUS
   const top = y * mapHeight - PIN_RADIUS
+  // Offset by the radius so the pin is centered over the normalized map coordinate.
 
   return (
     <TouchableOpacity

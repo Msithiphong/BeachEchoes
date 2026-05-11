@@ -1,3 +1,4 @@
+// Special map marker for the user's current or snapped campus location.
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -25,7 +26,7 @@ export default function YouAreHerePin({ centroid, mapWidth, mapHeight, onPress }
   const left = centroid.x * (mapWidth || 1);
   const top = centroid.y * (mapHeight || 1);
   
-  // Debug logging for pin placement
+  // Debug logging helps compare normalized coordinates against the rendered map size.
   if (process.env.EXPO_PUBLIC_DEBUG_GPS === 'true') {
     console.log('📍 YouAreHerePin Render:');
     console.log(`  Normalized: (${centroid.x.toFixed(4)}, ${centroid.y.toFixed(4)})`);

@@ -1,3 +1,4 @@
+// Simple regression coverage for the shared display-name validator.
 import { nameValidator } from '../../helpers/nameValidator'
 
 describe('nameValidator', () => {

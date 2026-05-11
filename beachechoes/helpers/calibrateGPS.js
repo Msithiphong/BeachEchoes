@@ -3,6 +3,7 @@
  * 
  * Calculates affine transformation coefficients using least squares regression
  * from reference GPS/map coordinate pairs.
+ * The printed constants are copied into helpers/mapUtils.js.
  * 
  * Run: node helpers/calibrateGPS.js
  */

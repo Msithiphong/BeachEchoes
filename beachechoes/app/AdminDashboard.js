@@ -1,3 +1,4 @@
+// Development/admin utility screen for exercising test accounts and legacy tooling.
 import React, { useState } from 'react'
 import { useRouter } from 'expo-router'
 import { Alert, ActivityIndicator } from 'react-native'
@@ -36,7 +37,7 @@ export default function AdminDashboard() {
         }
     }
 
-    // Show test sign-in buttons only in dev mode or when explicitly enabled
+    // Keep shortcuts available in development without exposing them by default in production.
     const showTestButtons = __DEV__ || SHOW_ADMIN_TEST_BUTTONS
 
     return (

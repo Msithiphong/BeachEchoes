@@ -1,3 +1,4 @@
+// Verifies optimistic like toggling behavior at the small component level.
 import React from 'react';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
 import LikeButton from '../../components/LikeButton';

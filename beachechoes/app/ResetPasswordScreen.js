@@ -74,7 +74,7 @@ export default function ResetPasswordScreen() {
       setSuccess(true)
       setEmail({ value: '', error: '' })
       
-      // Navigate back to login after 2 seconds
+      // Brief delay lets the success state render before returning to login.
       setTimeout(() => {
         router.replace('/LoginScreen')
       }, 2000)

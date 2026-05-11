@@ -1,3 +1,4 @@
+// Module-level notification rendering coverage without relying on the full polling provider.
 import React from 'react';
 import { render, waitFor } from '@testing-library/react-native';
 import Notifications from '../../app/Notifications';

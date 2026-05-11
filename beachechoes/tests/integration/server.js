@@ -1,3 +1,4 @@
+// Shared MSW server instance used across integration-level test files.
 const { setupServer } = require('msw/node');
 const { handlers } = require('./handlers');
 

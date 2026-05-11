@@ -60,6 +60,7 @@ export default function Dashboard() {
       const res = await fetch(`${API_BASE}/posts/feed`, { headers })
       const data = await res.json()
       if (data?.success) {
+        // Keep the feed state local so pull-to-refresh and like updates feel immediate.
         setPosts(data.posts ?? [])
       }
     } catch (error) {
@@ -96,6 +97,7 @@ export default function Dashboard() {
    * Updates the post state with new like count and status
    */
   const handleLikeToggle = (postId, liked, likeCount) => {
+    // Mirror ImageCard's optimistic result back into the feed without a full refetch.
     setPosts(prevPosts => 
       prevPosts.map(post => 
         post.id === postId 

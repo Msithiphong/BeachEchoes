@@ -121,7 +121,7 @@ export default function UserProfile() {
       const data = await res.json()
 
       if (data?.success) {
-        // Backend returns: self, none, following (one-way: current user → viewed user)
+        // Mirror the backend's one-way relationship model instead of inferring it client-side.
         setRelationship(data.relationship || 'none')
       }
     } catch (err) {
@@ -254,6 +254,7 @@ export default function UserProfile() {
     if (relationship === 'following') {
       return { label: 'Following', onPress: handleUnfollow, disabled: false, mode: 'outlined' }
     }
+    // Private/public approval rules are handled by the backend follow endpoint.
     return { label: 'Follow', onPress: handleFollow, disabled: false, mode: 'contained' }
   }
 

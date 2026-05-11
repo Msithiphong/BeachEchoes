@@ -1,4 +1,4 @@
-// app/(tabs)/Leaderboard.js
+// Leaderboard view for ranking users or posts against the same backend endpoint.
 
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { View, StyleSheet, ScrollView, Image, useWindowDimensions, Pressable } from 'react-native'
@@ -36,6 +36,7 @@ export default function Leaderboard() {
   // Removed togglePeriodValue
 
   const leaderboardUrl = useMemo(() => {
+    // The backend switches response shape based on the requested view.
     const params = new URLSearchParams({
       view,
       limit: '50',
@@ -67,6 +68,7 @@ export default function Leaderboard() {
       const data = Array.isArray(lb.data) ? lb.data : []
       setRows(data)
 
+      // Header stats are derived from the currently selected leaderboard dataset.
       if (view === 'users') {
         const totalUpvotes = data.reduce((sum, r) => sum + Number(r.total_upvotes ?? 0), 0)
         setStats({

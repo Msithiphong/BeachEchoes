@@ -89,7 +89,7 @@ export function snapToPolygonBoundary(point, polygon = VALID_CAMPUS_POLYGON) {
   let minDist = Infinity;
   let nearest = point;
   
-  // Check distance to each edge of the polygon
+  // Project against every edge so off-campus GPS points land on the nearest valid boundary.
   for (let i = 0; i < polygon.length; i++) {
     const p1 = polygon[i];
     const p2 = polygon[(i + 1) % polygon.length];

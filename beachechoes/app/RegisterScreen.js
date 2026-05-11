@@ -108,7 +108,7 @@ export default function RegisterScreen() {
       const syncData = await syncResponse.json()
       if (!syncData.success) {
         console.error('Failed to sync user to database:', syncData.error)
-        // Continue anyway - user is created in Firebase
+        // Preserve the successful Firebase signup even if backend syncing lags behind.
       }
 
       // Update local auth context with user data

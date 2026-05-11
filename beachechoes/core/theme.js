@@ -1,5 +1,6 @@
 import { DefaultTheme } from 'react-native-paper'
 
+// Paper theme overrides keep legacy components readable on the app's dark backgrounds.
 export const theme = {
   ...DefaultTheme,
   colors: {

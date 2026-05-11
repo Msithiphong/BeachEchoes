@@ -1,3 +1,4 @@
+// Optional overlay animation used to make manual refresh actions feel more tactile.
 import React, { forwardRef, useImperativeHandle, useRef } from 'react'
 import { Animated, Easing, StyleSheet, View } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
@@ -9,6 +10,7 @@ const WaveRefreshOverlay = forwardRef(function WaveRefreshOverlay(_, ref) {
 
   useImperativeHandle(ref, () => ({
     trigger: () => {
+      // Ignore overlapping triggers so the wave reads as one clean pass across the screen.
       if (running.current) return
       running.current = true
       travel.setValue(0)

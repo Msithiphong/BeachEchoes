@@ -1,3 +1,4 @@
+// Documents the clustering rules that drive grouped map pins.
 import { clusterPosts, formatPinCount } from '../../helpers/clusterUtils';
 
 describe('clusterUtils', () => {

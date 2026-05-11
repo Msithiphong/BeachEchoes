@@ -1,3 +1,4 @@
+// Legacy moderation/report playground for browsing feed posts with inline reporting tools.
 import React, { useEffect, useState } from 'react'
 import {
   View,
@@ -47,6 +48,7 @@ export default function MessageDisplay() {
       const headers = token ? { Authorization: `Bearer ${token}` } : {}
 
       const response = await fetch(`${API_BASE}/posts/feed`, { headers })
+      // Read as text first so the screen can explain non-JSON backend responses.
       const text = await response.text()
 
       let data

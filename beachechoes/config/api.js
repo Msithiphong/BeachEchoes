@@ -84,7 +84,7 @@ export const API_URL = getApiUrl()
 
 /**
  * The API base path with '/api' suffix (e.g., 'http://localhost:3000/api')
- * Convenient for making API calls without repeating '/api'
+ * Convenient for screens/components that call backend routes directly.
  * @constant {string}
  */
 export const API_BASE = `${API_URL}/api`

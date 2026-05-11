@@ -3,6 +3,7 @@ import { Platform, StyleSheet } from 'react-native'
 import { Text } from 'react-native-paper'
 import { useAppTheme } from '../context/AppThemeContext'
 
+// Companion body text style for auth screens and lightweight empty states.
 export default function Paragraph(props) {
   const { isDark } = useAppTheme()
   return <Text style={[styles.text, isDark ? styles.textWhite : styles.textDark]} {...props} />

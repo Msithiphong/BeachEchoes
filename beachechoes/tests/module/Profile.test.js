@@ -1,3 +1,4 @@
+// Module-level profile coverage for data loading, edit mode, and settings menu behavior.
 import React from 'react';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
 import { PaperProvider } from 'react-native-paper';

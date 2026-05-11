@@ -98,7 +98,7 @@ export default function LoginScreen() {
       const syncData = await syncResponse.json()
       if (!syncData.success) {
         console.error('Failed to sync user to database:', syncData.error)
-        // Continue anyway - user is authenticated in Firebase
+        // Keep the Firebase session even if the app profile sync needs a retry later.
       }
 
       // Update local auth context with user data

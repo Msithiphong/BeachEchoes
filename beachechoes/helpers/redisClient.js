@@ -1,5 +1,6 @@
 import { createClient } from 'redis'
 
+// Optional caching layer used by the backend without making Redis a hard runtime dependency.
 // Redis client singleton
 let redisClient = null
 let isConnected = false
@@ -51,6 +52,7 @@ export async function initRedis() {
     return redisClient
   } catch (error) {
     console.error('Failed to initialize Redis:', error.message)
+    // Cache misses are safer than blocking the server on a missing Redis instance.
     console.warn('Server will continue without caching')
     redisClient = null
     isConnected = false

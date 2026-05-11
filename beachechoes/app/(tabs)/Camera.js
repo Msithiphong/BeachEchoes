@@ -1,5 +1,5 @@
 /**
- * CameraScreen Component
+ * Camera capture screen for starting the post creation flow.
  */
 
 import React, { useRef, useState, useEffect } from 'react'
@@ -53,6 +53,7 @@ export default function CameraScreen() {
         const { status } = await Location.requestForegroundPermissionsAsync()
 
         if (status !== 'granted') {
+          // Preserve "You Are Here" behavior even when real GPS is unavailable.
           console.log('Location permission not granted, using CSULB fallback location')
           setLocationPermissionGranted(false)
           applyLocationToDraft(CSULB_FALLBACK_LOCATION)
@@ -192,6 +193,7 @@ export default function CameraScreen() {
 
       const exifMs = parseExifDate(exifDate)
 
+      // Prefer camera metadata so the post reflects when the photo was actually taken.
       const timestampMs = Number.isFinite(photo?.timestamp)
         ? photo.timestamp
         : exifMs || Date.now()

@@ -39,7 +39,8 @@ const app = initializeApp(firebaseConfig)
 
 /**
  * Firebase Authentication instance with AsyncStorage persistence.
- * This allows users to stay logged in even after closing the app.
+ * This allows users to stay logged in even after closing the app and keeps
+ * auth state consistent with AuthContext across cold starts.
  * 
  * @constant {Auth}
  */

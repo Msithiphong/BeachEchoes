@@ -1,3 +1,4 @@
+// Global Jest setup shared by unit, module, and integration tests.
 require('@testing-library/jest-native/extend-expect');
 
 // Mock Firebase App
@@ -103,7 +104,7 @@ jest.mock('@react-native-async-storage/async-storage', () =>
 // Note: Do NOT mock global.fetch here - it breaks MSW in integration tests
 // Individual test files can mock fetch as needed (e.g., module tests)
 
-// Silence console warnings in tests
+// Keep expected warnings/errors out of test output unless a spec opts in.
 global.console = {
   ...console,
   warn: jest.fn(),

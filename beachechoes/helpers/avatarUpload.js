@@ -1,6 +1,7 @@
 import { auth } from '../config/firebase'
 import { API_URL } from '../config/api'
 
+// Client helper for the avatar upload flow that bridges local files to the backend JSON API.
 /**
  * Upload avatar image to Firebase Storage via backend API
  * 
@@ -20,6 +21,7 @@ export async function uploadAvatar(userId, imageUri) {
     const response = await fetch(imageUri)
     const blob = await response.blob()
     
+    // FileReader keeps this aligned with other base64-backed upload helpers in the app.
     return new Promise((resolve, reject) => {
       const reader = new FileReader()
       reader.onloadend = async () => {

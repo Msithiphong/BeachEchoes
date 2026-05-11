@@ -63,7 +63,8 @@ export default function Messages() {
             // Get current user's Firebase authentication token
             const token = await auth.currentUser?.getIdToken()
             
-            // Send authenticated POST request to backend
+            // Messages uses the legacy message endpoint rather than the posts flow.
+            // It remains useful as a simple authenticated backend smoke test.
             const response = await fetch(`${API_URL}/api/messages`, { 
                 method: 'POST', 
                 headers: { 

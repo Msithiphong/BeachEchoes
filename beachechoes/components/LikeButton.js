@@ -31,6 +31,7 @@ export default function LikeButton({ postId, initialCount = 0, initialLiked = fa
       });
       const data = await res.json();
       if (data.success) {
+        // The endpoint toggles like state, so derive the displayed count from the new status.
         const nextLiked = data.liked;
         const nextCount = nextLiked ? count + 1 : count - 1;
         setLiked(nextLiked);

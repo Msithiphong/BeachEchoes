@@ -1,2 +1,2 @@
-// This index.js file shows React Native what the starting screen will be
+// Expo Router uses this file to map the root route to the unauthenticated landing screen.
 export { default } from './StartScreen'

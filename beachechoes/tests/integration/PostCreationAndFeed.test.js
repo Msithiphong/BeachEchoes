@@ -1,3 +1,4 @@
+// Integration scenarios for feed population and post ordering through mocked backend responses.
 import React from 'react';
 import { render, waitFor } from '@testing-library/react-native';
 import { server } from './server';

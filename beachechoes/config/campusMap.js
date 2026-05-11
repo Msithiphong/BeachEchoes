@@ -19,7 +19,8 @@ export const CLUSTER_THRESHOLD = 0.02;
  *
  * Vertices trace the campus perimeter clockwise starting from the
  * north-west corner.  Adjust these points to match the actual campus
- * boundary visible in the map image.
+ * boundary visible in the map image.  Frontend placement validation and
+ * backend post validation both rely on the same shared coordinates.
  */
 export const VALID_CAMPUS_POLYGON = [
   { x: 0.12286, y: 0.02909 },

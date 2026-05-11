@@ -67,6 +67,7 @@ export default function StartScreen() {
       
       
 
+      {/* Team/testing shortcut kept visible from the welcome screen. */}
       <Button
         mode="contained"
         onPress={() => router.push('/AdminDashboard')}

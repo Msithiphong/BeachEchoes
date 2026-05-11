@@ -104,7 +104,7 @@ function getNotificationContent(notification) {
 export function NotificationPollerProvider({ children }) {
   const { user } = useContext(AuthContext)
   
-  // Track notification IDs we've already sent local notifications for
+  // Track IDs locally so polling can stay idempotent across rerenders and restarts.
   const sentNotificationIds = useRef(new Set())
 
   /**
@@ -163,7 +163,7 @@ export function NotificationPollerProvider({ children }) {
                 { notificationId: notification.id, type: notification.type }
               )
               
-              // Mark this notification as sent
+              // Mark after scheduling succeeds so failed sends can retry on a later poll.
               sentNotificationIds.current.add(notification.id)
             } catch (err) {
               console.error('Failed to send local notification:', err)

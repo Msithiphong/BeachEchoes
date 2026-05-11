@@ -1,3 +1,4 @@
+// Inbox-style screen for polling, rendering, and acting on backend notifications.
 import React, { useEffect, useState, useContext, useCallback } from 'react'
 import {
   View, Text, Image, StyleSheet,
@@ -12,7 +13,7 @@ import { auth } from '../config/firebase'
 import { AuthContext } from '../context/AuthContext'
 import { theme } from '../core/theme'
 
-// Use shorter polling interval for tests, longer for production
+// Tests poll faster so notification assertions do not spend most of their time waiting.
 const POLLING_INTERVAL_MS = process.env.NODE_ENV === 'test' ? 200 : 5000
 
 export default function Notifications() {
@@ -82,7 +83,7 @@ export default function Notifications() {
       await markAsRead([notification.id])
     }
 
-    // Navigate based on type
+    // Navigation stays type-specific so each notification can deep-link appropriately.
     if (notification.type === 'friend_request') {
       // Don't navigate for friend requests - handle inline with buttons
       return

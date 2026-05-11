@@ -1,3 +1,4 @@
+// Module-level coverage for feed fetching, auth redirects, and local like state updates.
 import React from 'react';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
 import Dashboard from '../../app/(tabs)/Dashboard';

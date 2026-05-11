@@ -1,3 +1,4 @@
+// Detail view for one or more posts selected from a clustered map pin.
 import React, { useEffect, useState, useContext, useCallback } from 'react';
 import {
   View,
@@ -49,7 +50,10 @@ export default function PostDetail() {
       if (includeHidden === '1') params.set('includeHidden', '1');
       const res = await fetch(`${API_BASE}/posts/detail?${params.toString()}`, { headers });
       const data = await res.json();
-      if (data.success) setPosts(data.posts);
+      if (data.success) {
+        // Cluster taps can expand into multiple posts, so preserve backend ordering here.
+        setPosts(data.posts);
+      }
     } catch (err) {
       console.error('PostDetail fetch error:', err);
     } finally {
@@ -82,6 +86,7 @@ export default function PostDetail() {
         throw new Error(data?.error || 'Failed to update hidden status');
       }
 
+      // Remove the post locally so the current filtered view matches the action immediately.
       setPosts((prev) => prev.filter((post) => post.id !== postId));
     } catch (err) {
       console.error('Post hide toggle error:', err);

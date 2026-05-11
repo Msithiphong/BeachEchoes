@@ -1,3 +1,4 @@
+// Bottom-sheet style modal for collecting a structured post report.
 import React, { useState } from 'react';
 import {
   Modal,
@@ -25,6 +26,7 @@ export default function ReportPostModal({ visible, postId, onClose }) {
   const [loading, setLoading] = useState(false);
 
   function handleClose() {
+    // Reset local form state so each open starts from a clean report draft.
     setReason(null);
     setDetails('');
     onClose();

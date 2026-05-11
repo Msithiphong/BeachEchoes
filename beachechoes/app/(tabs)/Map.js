@@ -1,3 +1,4 @@
+// Map tab for browsing campus posts by location, category, and visibility filters.
 import React, { useEffect, useState, useCallback, useRef, useContext } from 'react'
 import {
   View,
@@ -72,7 +73,8 @@ export default function MapScreen() {
           ? mutedDataPromise
           : selectedCategory === 'Hidden'
             ? hiddenDataPromise
-          : (() => {
+            : (() => {
+              // Only send a category param when a real post category is selected.
               const params = new URLSearchParams()
 
               if (selectedCategory !== 'All') {
@@ -95,6 +97,7 @@ export default function MapScreen() {
         const nextPosts = data?.posts ?? []
 
         setPosts(nextPosts)
+        // Cluster after filtering so each visible pin reflects the active tab state.
         setClusters(clusterPosts(nextPosts))
         setMutedPostCount(
           mutedData?.success ? (mutedData.posts ?? []).length : 0

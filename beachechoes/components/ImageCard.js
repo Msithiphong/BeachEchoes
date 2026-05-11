@@ -1,3 +1,4 @@
+// Feed card with image-first presentation, optimistic likes, and tap/double-tap actions.
 import React, { useState, useRef, useEffect } from 'react'
 import { View, ImageBackground, StyleSheet, Text, TouchableOpacity, Animated, Image } from 'react-native'
 import { Ionicons } from '@expo/vector-icons'
@@ -61,7 +62,7 @@ export default function ImageCard({
       singleTapTimer.current = null
     }
 
-    // Check if this is a double tap
+    // Debounce single-tap navigation so a second tap can still convert into a like gesture.
     if (now - lastTap.current < DOUBLE_TAP_DELAY) {
       // Double tap - trigger like
       triggerLike()
@@ -153,7 +154,7 @@ export default function ImageCard({
         throw new Error(data.error || 'Failed to toggle like')
       }
 
-      // Sync with backend response
+      // Let the backend stay authoritative in case another device changed the count.
       setLiked(data.liked)
       setLikes(data.likeCount)
 
@@ -174,7 +175,7 @@ export default function ImageCard({
   const toggleLike = async () => {
     if (pending || !postId) return
 
-    // Optimistic update
+    // Single-press likes share the same optimistic pattern as the double-tap gesture.
     const wasLiked = liked
     const prevLikes = likes
 

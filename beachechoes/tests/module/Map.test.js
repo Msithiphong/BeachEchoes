@@ -1,3 +1,4 @@
+// Module-level checks for map filtering, hidden/muted counters, and focus-based refetching.
 import React from 'react';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import MapScreen from '../../app/(tabs)/Map';

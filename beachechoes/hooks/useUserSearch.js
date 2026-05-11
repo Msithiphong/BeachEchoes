@@ -15,7 +15,7 @@ export default function useUserSearch(debounceMs = 300) {
   const [suggestions, setSuggestions] = useState([])
   const [loading, setLoading] = useState(false)
 
-  // Keep the debounced function in a ref so it's stable across renders
+  // Keep the debounced fetch stable so typing does not recreate/cancel it on every render.
   const fetchRef = useRef(
     debounce(async (query) => {
       if (!query || query.trim().length === 0) {

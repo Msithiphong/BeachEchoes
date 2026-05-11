@@ -43,7 +43,7 @@ export default function UserAutocomplete({
       onClear={handleClear}
       loading={loading}
       debounce={0} // we handle debounce ourselves in the hook
-      useFilter={false} // server-side filtering
+      useFilter={false} // keep results consistent with backend prefix search behavior
       clearOnFocus={false}
       closeOnBlur={true}
       showChevron={false}

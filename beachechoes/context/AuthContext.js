@@ -51,6 +51,8 @@ export const AuthContext = createContext()
  * @returns {JSX.Element} Provider component
  */
 export function AuthProvider({ children }) {
+    // Expose a normalized subset of Firebase user fields to the UI.
+    // This keeps screen code decoupled from the full Firebase user object.
     // Current authenticated user object
     const [user, setUser] = useState(null)
     

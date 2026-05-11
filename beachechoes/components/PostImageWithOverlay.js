@@ -11,6 +11,7 @@ export default function PostImageWithOverlay({ imageUri, overlayText, style }) {
     <View style={[styles.container, style]}>
       <Image source={{ uri: imageUri }} style={styles.image} resizeMode="cover" />
       {!!overlayText && (
+        // Only render the caption chrome when there is actual overlay text to show.
         <View style={styles.overlayBadge} pointerEvents="none">
           <Text style={styles.overlayText}>{overlayText}</Text>
         </View>

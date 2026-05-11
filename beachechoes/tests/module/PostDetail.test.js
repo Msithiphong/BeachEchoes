@@ -1,3 +1,4 @@
+// Module-level coverage for post detail actions like hide/unhide and comment navigation.
 import React from 'react';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 import PostDetail from '../../app/PostDetail';

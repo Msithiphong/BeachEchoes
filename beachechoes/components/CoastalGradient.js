@@ -1,3 +1,4 @@
+// Shared animated background that gives screens subtle ambient coastal motion.
 import React, { useEffect, useRef } from 'react'
 import { Animated, Easing, StyleSheet } from 'react-native'
 import { LinearGradient } from 'expo-linear-gradient'
@@ -33,6 +34,7 @@ export default function CoastalGradient({ children, style }) {
         ])
       )
 
+    // Independent drift timings keep the background from moving like a single rigid layer.
     const topAnim = makeLoop(topDrift, 7000, 1)
     const midAnim = makeLoop(midDrift, 9000, 1)
     const bottomAnim = makeLoop(bottomDrift, 7800, 1)

@@ -1,3 +1,4 @@
+// Exercises the Firebase-first signup flow plus local field validation behavior.
 import React from 'react'
 import { render, fireEvent, waitFor } from '@testing-library/react-native'
 import RegisterScreen from '../../app/RegisterScreen'

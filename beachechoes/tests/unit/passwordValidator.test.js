@@ -1,3 +1,4 @@
+// Simple regression coverage for the shared password validator.
 import { passwordValidator } from '../../helpers/passwordValidator'
 
 describe('passwordValidator', () => {

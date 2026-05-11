@@ -1,10 +1,12 @@
 import React, { createContext, useContext, useEffect, useState } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 
+// Persist the user's light/dark preference between app launches.
 const STORAGE_KEY = 'beachechoes_theme_mode'
 
 const AppThemeContext = createContext(null)
 
+// Theme-specific colors feed gradient backgrounds and glassmorphism surfaces.
 const palettes = {
   dark: {
     mode: 'dark',
@@ -66,6 +68,7 @@ export function AppThemeProvider({ children }) {
 export function useAppTheme() {
   const ctx = useContext(AppThemeContext)
   if (!ctx) {
+    // Fall back to a safe default so tests and isolated renders do not crash.
     return {
       mode: 'dark',
       isDark: true,

@@ -1,3 +1,4 @@
+// Full post thread screen with paginated comments, replies, and post-level actions.
 import React, { useEffect, useState, useContext, useCallback, useRef } from 'react';
 import {
   View,
@@ -66,6 +67,7 @@ function dedupeItemsById(items = []) {
 }
 
 function normalizeCommentThread(items = []) {
+  // Merge duplicates defensively because pagination and optimistic updates can overlap.
   const normalized = [];
   const commentIndexById = new Map();
 
@@ -318,7 +320,7 @@ export default function PostWithComments() {
       if (data.success) {
         // Add new comment or reply
         if (replyTo) {
-          // It's a reply - add to parent comment's replies array
+          // Replies are nested in place so the user sees the update without a refetch.
           setComments(prev => normalizeCommentThread(prev.map(comment => {
             if (comment.id === replyTo.id) {
               return {
@@ -331,7 +333,7 @@ export default function PostWithComments() {
           // Auto-expand the parent comment to show the new reply
           setExpandedReplies(prev => ({ ...prev, [replyTo.id]: true }));
         } else {
-          // It's a parent comment - add to top of comments list with empty replies array
+          // New top-level comments are prepended to match reverse-chronological loading.
           setComments(prev => normalizeCommentThread([{ ...data.comment, replies: [] }, ...prev]));
         }
         setCommentText('');

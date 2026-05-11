@@ -1,3 +1,4 @@
+// Single-file Express backend for auth sync, profiles, posts, comments, and notifications.
 import express from 'express'
 import { neon } from '@neondatabase/serverless'
 import cors from 'cors'
@@ -19,6 +20,7 @@ app.use(cors())
 app.use(express.json({ limit: '50mb' })) // Increased limit for image uploads
 app.use(express.urlencoded({ limit: '50mb', extended: true }))
 
+// Neon remains the main data store even though some hot paths can optionally cache in Redis.
 // Neon db
 const sql = neon(process.env.DATABASE_URL)
 

@@ -1,3 +1,4 @@
+// Exercises the Firebase-first login flow and its validation/navigation behavior.
 import React from 'react'
 import { render, fireEvent, waitFor } from '@testing-library/react-native'
 import LoginScreen from '../../app/LoginScreen'

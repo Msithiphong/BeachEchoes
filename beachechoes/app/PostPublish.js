@@ -26,6 +26,7 @@ export default function PostPublish() {
   const didSubmit = useRef(false);
 
   useEffect(() => {
+    // Guard against duplicate publish attempts if React remounts the screen in development.
     if (didSubmit.current) return;
     didSubmit.current = true;
 

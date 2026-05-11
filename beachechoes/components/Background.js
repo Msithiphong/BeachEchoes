@@ -2,6 +2,7 @@ import React from 'react'
 import { StyleSheet, KeyboardAvoidingView } from 'react-native'
 import CoastalGradient from './CoastalGradient'
 
+// Shared page scaffold that combines the app gradient with keyboard-safe centering.
 export default function Background({ children }) {
   return (
     <CoastalGradient style={styles.background}>

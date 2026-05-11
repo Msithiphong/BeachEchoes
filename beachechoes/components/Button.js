@@ -3,6 +3,7 @@ import { StyleSheet } from 'react-native'
 import { Button as PaperButton } from 'react-native-paper'
 import { theme } from '../core/theme'
 
+// Thin wrapper so the app can share one button shape/text treatment everywhere.
 export default function Button({ mode, style, ...props }) {
   return (
     <PaperButton

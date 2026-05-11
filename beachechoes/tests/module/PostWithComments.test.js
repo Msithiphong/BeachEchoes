@@ -1,3 +1,4 @@
+// Module-level coverage for thread fetching, nested comments, and comment submission flows.
 import React from 'react';
 import { Alert } from 'react-native';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';

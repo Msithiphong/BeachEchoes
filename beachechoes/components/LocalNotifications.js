@@ -1,6 +1,7 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
+// Centralizes local notification behavior for polling-driven and manual test notifications.
 // Configure the notification handler.
 // This MUST be defined at the top level, outside of any component or function.
 // It determines how the app handles notifications received while the app is currently open (foreground).

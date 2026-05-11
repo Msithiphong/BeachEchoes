@@ -1,6 +1,7 @@
 import React from 'react'
 import { Image, StyleSheet } from 'react-native'
 
+// Shared brand mark used on auth and onboarding-style screens.
 export default function Logo() {
   return <Image source={require('../assets/images/logo.png')} style={styles.image} />
 }
