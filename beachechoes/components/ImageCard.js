@@ -7,6 +7,7 @@ import { API_BASE } from '../config/api'
 
 // Debug mode for ImageCard layout
 const DEBUG_IMAGECARD = process.env.EXPO_PUBLIC_DEBUG_IMAGECARD === 'true'
+const viewedEchoes = new Set()
 
 export default function ImageCard({ 
   image, 
@@ -24,12 +25,15 @@ export default function ImageCard({
   onImagePress,
   style 
 }) {
+  const [isViewed, setIsViewed] = useState(() => (postId ? viewedEchoes.has(postId) : false))
   const [liked, setLiked] = useState(initialLiked)
   const [likes, setLikes] = useState(likeCount)
   const [pending, setPending] = useState(false)
   const heartScale = useRef(new Animated.Value(0)).current
   const cardScale = useRef(new Animated.Value(1)).current
   const cardGlow = useRef(new Animated.Value(0)).current
+  const tapFlash = useRef(new Animated.Value(0)).current
+  const borderPulse = useRef(new Animated.Value(0)).current
   const lastTap = useRef(0)
   const singleTapTimer = useRef(null)
 
@@ -42,6 +46,16 @@ export default function ImageCard({
     setLikes(likeCount)
   }, [likeCount])
 
+  useEffect(() => {
+    setIsViewed(postId ? viewedEchoes.has(postId) : false)
+  }, [postId])
+
+  const markViewed = () => {
+    if (!postId || viewedEchoes.has(postId)) return
+    viewedEchoes.add(postId)
+    setIsViewed(true)
+  }
+
   // Cleanup single tap timer on unmount
   useEffect(() => {
     return () => {
@@ -50,6 +64,29 @@ export default function ImageCard({
       }
     }
   }, [])
+
+  useEffect(() => {
+    const pulseLoop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(borderPulse, {
+          toValue: 1,
+          duration: 2200,
+          useNativeDriver: false,
+        }),
+        Animated.timing(borderPulse, {
+          toValue: 0,
+          duration: 2200,
+          useNativeDriver: false,
+        }),
+      ])
+    )
+
+    pulseLoop.start()
+
+    return () => {
+      pulseLoop.stop()
+    }
+  }, [borderPulse])
 
   const handleDoubleTap = () => {
     const now = Date.now()
@@ -83,9 +120,15 @@ export default function ImageCard({
             duration: 120,
             useNativeDriver: false,
           }),
+          Animated.timing(tapFlash, {
+            toValue: 1,
+            duration: 130,
+            useNativeDriver: false,
+          }),
         ]).start()
 
         singleTapTimer.current = setTimeout(() => {
+          markViewed()
           Animated.parallel([
             Animated.spring(cardScale, {
               toValue: 1,
@@ -96,6 +139,11 @@ export default function ImageCard({
             Animated.timing(cardGlow, {
               toValue: 0,
               duration: 180,
+              useNativeDriver: false,
+            }),
+            Animated.timing(tapFlash, {
+              toValue: 0,
+              duration: 190,
               useNativeDriver: false,
             }),
           ]).start()
@@ -123,12 +171,12 @@ export default function ImageCard({
         Animated.spring(heartScale, {
           toValue: 1,
           friction: 3,
-          useNativeDriver: true,
+          useNativeDriver: false,
         }),
         Animated.timing(heartScale, {
           toValue: 0,
           duration: 400,
-          useNativeDriver: true,
+          useNativeDriver: false,
         }),
       ]).start()
     } else {
@@ -228,23 +276,99 @@ export default function ImageCard({
           transform: [{ scale: cardScale }],
           borderColor: cardGlow.interpolate({
             inputRange: [0, 1],
-            outputRange: ['rgba(255,255,255,0.10)', 'rgba(121,245,255,0.75)'],
+            outputRange: ['rgba(255,255,255,0.12)', 'rgba(121,245,255,0.8)'],
           }),
           shadowOpacity: cardGlow.interpolate({
             inputRange: [0, 1],
-            outputRange: [0.2, 0.4],
+            outputRange: [0.24, 0.46],
           }),
         },
       ]}
     >
-      <TouchableOpacity activeOpacity={1} onPress={handleDoubleTap} style={[styles.touchable, DEBUG_IMAGECARD && styles.debugTouchable]}>
-        <ImageBackground
-          source={image}
-          resizeMode="cover"
-          style={[styles.image, DEBUG_IMAGECARD && styles.debugImage]}
-          imageStyle={styles.imageRounded}
-        >
-          <View style={[styles.overlay, DEBUG_IMAGECARD && styles.debugOverlay]}>
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          styles.dynamicBorder,
+          isViewed ? styles.dynamicBorderViewed : styles.dynamicBorderUnviewed,
+          {
+            opacity: borderPulse.interpolate({
+              inputRange: [0, 1],
+              outputRange: isViewed ? [0.72, 0.82] : [0.46, 0.82],
+            }),
+          },
+        ]}
+      />
+      {!isViewed && (
+        <>
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              styles.waterHaloOuter,
+              {
+                opacity: borderPulse.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0.32, 0.55],
+                }),
+                transform: [
+                  {
+                    scale: borderPulse.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [0.99, 1.015],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          />
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              styles.waterHaloInner,
+              {
+                opacity: borderPulse.interpolate({
+                  inputRange: [0, 1],
+                  outputRange: [0.45, 0.82],
+                }),
+              },
+            ]}
+          />
+        </>
+      )}
+      <View style={styles.innerClip}>
+        <TouchableOpacity activeOpacity={1} onPress={handleDoubleTap} style={[styles.touchable, DEBUG_IMAGECARD && styles.debugTouchable]}>
+          <ImageBackground
+            source={image}
+            resizeMode="cover"
+            style={[styles.image, DEBUG_IMAGECARD && styles.debugImage]}
+            imageStyle={styles.imageRounded}
+          >
+            <View style={[styles.overlay, DEBUG_IMAGECARD && styles.debugOverlay]}>
+            <Animated.View
+              pointerEvents="none"
+              style={[
+                styles.tapFlash,
+                {
+                  opacity: tapFlash.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [0, 0.4],
+                  }),
+                  transform: [
+                    {
+                      translateX: tapFlash.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [-120, 120],
+                      }),
+                    },
+                    {
+                      rotate: tapFlash.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: ['-12deg', '12deg'],
+                      }),
+                    },
+                  ],
+                },
+              ]}
+            />
             <Text style={[styles.text, DEBUG_IMAGECARD && styles.debugText]}>{children}</Text>
 
             {/* Double-tap heart animation */}
@@ -296,16 +420,23 @@ export default function ImageCard({
               {/* Comment button */}
               {onCommentPress && (
                 <>
-                  <TouchableOpacity onPress={() => onCommentPress(postId)} style={[styles.commentBtn, DEBUG_IMAGECARD && styles.debugIconButton]}>
+                  <TouchableOpacity
+                    onPress={() => {
+                      markViewed()
+                      onCommentPress(postId)
+                    }}
+                    style={[styles.commentBtn, DEBUG_IMAGECARD && styles.debugIconButton]}
+                  >
                     <Ionicons name="chatbubble-outline" size={22} color="#ffffff" />
                   </TouchableOpacity>
                   <Text style={[styles.commentCount, DEBUG_IMAGECARD && styles.debugCount]}>{commentCount}</Text>
                 </>
               )}
             </View>
-          </View>
-        </ImageBackground>
-      </TouchableOpacity>
+            </View>
+          </ImageBackground>
+        </TouchableOpacity>
+      </View>
     </Animated.View>
   )
 }
@@ -315,7 +446,7 @@ const styles = StyleSheet.create({
     width: '100%',
     height: 180,
     borderRadius: 16,
-    overflow: 'hidden',
+    overflow: 'visible',
     marginVertical: 10,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.1)',
@@ -324,6 +455,55 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 7,
+  },
+  innerClip: {
+    flex: 1,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  dynamicBorder: {
+    ...StyleSheet.absoluteFillObject,
+    borderRadius: 16,
+    borderWidth: 1.3,
+    borderColor: 'rgba(171, 246, 255, 0.9)',
+  },
+  dynamicBorderUnviewed: {
+    borderColor: 'rgba(171, 246, 255, 0.9)',
+    shadowColor: '#8beaff',
+    shadowOpacity: 0.45,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 0 },
+  },
+  dynamicBorderViewed: {
+    borderColor: 'rgba(173, 179, 187, 0.82)',
+    shadowColor: '#98a3ad',
+    shadowOpacity: 0.1,
+    shadowRadius: 5,
+    shadowOffset: { width: 0, height: 0 },
+  },
+  waterHaloOuter: {
+    position: 'absolute',
+    top: -8,
+    left: -8,
+    right: -8,
+    bottom: -8,
+    borderRadius: 22,
+    borderWidth: 2.4,
+    borderColor: 'rgba(149, 237, 255, 0.85)',
+    shadowColor: '#8beaff',
+    shadowOpacity: 0.42,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 1 },
+  },
+  waterHaloInner: {
+    position: 'absolute',
+    top: -3,
+    left: -3,
+    right: -3,
+    bottom: -3,
+    borderRadius: 19,
+    borderWidth: 1.3,
+    borderColor: 'rgba(226, 251, 255, 0.95)',
   },
   image: {
     flex: 1,
@@ -341,6 +521,13 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 44,
     width: '100%',
+  },
+  tapFlash: {
+    position: 'absolute',
+    width: '60%',
+    height: '180%',
+    backgroundColor: 'rgba(184, 246, 255, 0.78)',
+    borderRadius: 80,
   },
   text: {
     color: '#ffffff',

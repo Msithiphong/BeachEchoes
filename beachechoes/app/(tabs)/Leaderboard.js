@@ -9,6 +9,7 @@ import Background from '../../components/Background'
 import { API_BASE } from '../../config/api'
 import WaveRefreshOverlay from '../../components/WaveRefreshOverlay'
 import { useAppTheme } from '../../context/AppThemeContext'
+import RefreshGridRippleOverlay from '../../components/RefreshGridRippleOverlay'
 
 const medalGold = require('../../assets/images/gold-medal.png')
 const medalSilver = require('../../assets/images/silvar-medal.png')
@@ -32,6 +33,7 @@ export default function Leaderboard() {
   const [rows, setRows] = useState([])
   const [stats, setStats] = useState({ echoes: 0, appraises: 0, comments: 0 })
   const waveRef = useRef(null)
+  const rippleRef = useRef(null)
 
   // Removed togglePeriodValue
 
@@ -47,6 +49,7 @@ export default function Leaderboard() {
   async function loadData(withWave = false) {
     if (withWave) {
       waveRef.current?.trigger()
+      rippleRef.current?.trigger()
     }
     setLoading(true)
     setError('')
@@ -129,6 +132,7 @@ export default function Leaderboard() {
               <Pressable
                 onPress={() => {
                   waveRef.current?.trigger()
+                  rippleRef.current?.trigger()
                   setView('users')
                 }}
                 style={[
@@ -149,6 +153,7 @@ export default function Leaderboard() {
               <Pressable
                 onPress={() => {
                   waveRef.current?.trigger()
+                  rippleRef.current?.trigger()
                   setView('posts')
                 }}
                 style={[
@@ -260,6 +265,7 @@ export default function Leaderboard() {
           </View>
         </ScrollView>
       </View>
+      <RefreshGridRippleOverlay ref={rippleRef} />
       <WaveRefreshOverlay ref={waveRef} />
     </Background>
   )
