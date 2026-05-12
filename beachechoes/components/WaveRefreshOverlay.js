@@ -22,13 +22,13 @@ const WaveRefreshOverlay = forwardRef(function WaveRefreshOverlay(_, ref) {
             toValue: 1,
             duration: 180,
             easing: Easing.out(Easing.quad),
-            useNativeDriver: false,
+            useNativeDriver: true,
           }),
           Animated.timing(travel, {
             toValue: 1,
             duration: 580,
             easing: Easing.out(Easing.cubic),
-            useNativeDriver: false,
+            useNativeDriver: true,
           }),
         ]),
         Animated.parallel([
@@ -36,13 +36,13 @@ const WaveRefreshOverlay = forwardRef(function WaveRefreshOverlay(_, ref) {
             toValue: 0,
             duration: 460,
             easing: Easing.inOut(Easing.quad),
-            useNativeDriver: false,
+            useNativeDriver: true,
           }),
           Animated.timing(travel, {
             toValue: 0,
             duration: 460,
             easing: Easing.inOut(Easing.cubic),
-            useNativeDriver: false,
+            useNativeDriver: true,
           }),
         ]),
       ]).start(() => {

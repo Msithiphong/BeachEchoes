@@ -29,8 +29,6 @@ import { auth } from '../../config/firebase'
 import { API_BASE } from '../../config/api'
 import WaveRefreshOverlay from '../../components/WaveRefreshOverlay'
 import { useAppTheme } from '../../context/AppThemeContext'
-import RefreshGridRippleOverlay from '../../components/RefreshGridRippleOverlay'
-import StaggerRevealItem from '../../components/StaggerRevealItem'
 
 export default function Dashboard() {
   const { isDark, toggleTheme } = useAppTheme()
@@ -45,45 +43,6 @@ export default function Dashboard() {
   const [posts, setPosts] = useState([])
   const [loadingPosts, setLoadingPosts] = useState(true)
   const waveRef = useRef(null)
-  const rippleRef = useRef(null)
-  const sparkleA = useRef(new Animated.Value(0)).current
-  const sparkleB = useRef(new Animated.Value(0)).current
-  const sparkleC = useRef(new Animated.Value(0)).current
-
-  useEffect(() => {
-    const makeSparkleLoop = (value, delay) =>
-      Animated.loop(
-        Animated.sequence([
-          Animated.delay(delay),
-          Animated.timing(value, {
-            toValue: 1,
-            duration: 720,
-            useNativeDriver: false,
-          }),
-          Animated.timing(value, {
-            toValue: 0,
-            duration: 720,
-            useNativeDriver: false,
-          }),
-          Animated.delay(260),
-        ])
-      )
-
-    const a = makeSparkleLoop(sparkleA, 0)
-    const b = makeSparkleLoop(sparkleB, 180)
-    const c = makeSparkleLoop(sparkleC, 360)
-
-    a.start()
-    b.start()
-    c.start()
-
-    return () => {
-      a.stop()
-      b.stop()
-      c.stop()
-    }
-  }, [sparkleA, sparkleB, sparkleC])
-
 
   /**
    * Fetch posts from the feed
@@ -91,7 +50,6 @@ export default function Dashboard() {
   const fetchPosts = async (withWave = false) => {
     if (withWave) {
       waveRef.current?.trigger()
-      rippleRef.current?.trigger()
     }
     try {
       setLoadingPosts(true)
@@ -178,51 +136,7 @@ export default function Dashboard() {
           onScroll={scrollHandler}
         >
             {/* App logo */}
-            <View style={styles.logoWrap}>
-              <Logo />
-              <Animated.View
-                pointerEvents="none"
-                style={[
-                  styles.sparkle,
-                  styles.sparkleA,
-                  {
-                    opacity: sparkleA.interpolate({ inputRange: [0, 1], outputRange: [0.08, 0.92] }),
-                    transform: [
-                      { scale: sparkleA.interpolate({ inputRange: [0, 1], outputRange: [0.45, 1.12] }) },
-                      { translateY: sparkleA.interpolate({ inputRange: [0, 1], outputRange: [6, -10] }) },
-                    ],
-                  },
-                ]}
-              />
-              <Animated.View
-                pointerEvents="none"
-                style={[
-                  styles.sparkle,
-                  styles.sparkleB,
-                  {
-                    opacity: sparkleB.interpolate({ inputRange: [0, 1], outputRange: [0.08, 0.86] }),
-                    transform: [
-                      { scale: sparkleB.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1.04] }) },
-                      { translateY: sparkleB.interpolate({ inputRange: [0, 1], outputRange: [4, -12] }) },
-                    ],
-                  },
-                ]}
-              />
-              <Animated.View
-                pointerEvents="none"
-                style={[
-                  styles.sparkle,
-                  styles.sparkleC,
-                  {
-                    opacity: sparkleC.interpolate({ inputRange: [0, 1], outputRange: [0.06, 0.82] }),
-                    transform: [
-                      { scale: sparkleC.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1.08] }) },
-                      { translateY: sparkleC.interpolate({ inputRange: [0, 1], outputRange: [5, -11] }) },
-                    ],
-                  },
-                ]}
-              />
-            </View>
+            <Logo />
             
             {/* Personalized welcome header */}
             <Header>Welcome, {user.name || 'User'}!</Header>
@@ -244,34 +158,27 @@ export default function Dashboard() {
             </View>
 
             {/* Loading state for posts */}
-            <View style={styles.cardsSection}>
             {loadingPosts ? (
               <ActivityIndicator size="large" color="#7be5ff" style={{ marginTop: 20 }} />
             ) : posts.length > 0 ? (
               // Render real posts from the database
-              posts.map((post, index) => (
-                <StaggerRevealItem
+              posts.map((post) => (
+                <ImageCard
                   key={post.id}
-                  index={index}
-                  total={posts.length}
-                  resetKey={`${post.id}-${loadingPosts ? 'loading' : 'ready'}`}
+                  postId={post.id}
+                  image={{ uri: post.image_url }}
+                  username={post.username || 'Anonymous'}
+                  ownerFirebaseUid={post.owner_firebase_uid}
+                  onUsernamePress={(ownerUid) => router.push(`/profile/${ownerUid}`)}
+                  likeCount={post.like_count}
+                  initialLiked={post.liked}
+                  onLikeToggle={handleLikeToggle}
+                  commentCount={post.comment_count || 0}
+                  onCommentPress={(postId) => router.push(`/PostWithComments?postId=${postId}`)}
+                  onImagePress={(postId) => router.push(`/PostWithComments?postId=${postId}`)}
                 >
-                  <ImageCard
-                    postId={post.id}
-                    image={{ uri: post.image_url }}
-                    username={post.username || 'Anonymous'}
-                    ownerFirebaseUid={post.owner_firebase_uid}
-                    onUsernamePress={(ownerUid) => router.push(`/profile/${ownerUid}`)}
-                    likeCount={post.like_count}
-                    initialLiked={post.liked}
-                    onLikeToggle={handleLikeToggle}
-                    commentCount={post.comment_count || 0}
-                    onCommentPress={(postId) => router.push(`/PostWithComments?postId=${postId}`)}
-                    onImagePress={(postId) => router.push(`/PostWithComments?postId=${postId}`)}
-                  >
-                    {post.overlay_text}
-                  </ImageCard>
-                </StaggerRevealItem>
+                  {post.overlay_text}
+                </ImageCard>
               ))
             ) : (
               // Empty state when no posts exist
@@ -279,7 +186,6 @@ export default function Dashboard() {
                 <Text style={styles.emptyText}>No posts yet. Be the first to share!</Text>
               </View>
             )}
-            </View>
             
             {/* Display logged-in user email 
             <Paragraph style={styles.email}>
@@ -288,7 +194,6 @@ export default function Dashboard() {
             */}
 
         </Animated.ScrollView>
-        <RefreshGridRippleOverlay ref={rippleRef} />
         <WaveRefreshOverlay ref={waveRef} />
       </Background>
     </View>
@@ -310,50 +215,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingTop: 4,
     paddingBottom: 34,
-    paddingHorizontal: 12,
-  },
-  cardsSection: {
-    marginTop: 18,
-    width: '100%',
   },
   email: {
     fontSize: 14,
     color: '#666',
     marginTop: 10,
-  },
-  logoWrap: {
-    position: 'relative',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sparkle: {
-    position: 'absolute',
-    zIndex: 5,
-    width: 10,
-    height: 10,
-    borderRadius: 999,
-    backgroundColor: 'rgba(214, 248, 255, 0.96)',
-    shadowColor: '#a9ecff',
-    shadowOpacity: 0.65,
-    shadowRadius: 7,
-    shadowOffset: { width: 0, height: 0 },
-    elevation: 7,
-  },
-  sparkleA: {
-    top: 126,
-    left: 68,
-  },
-  sparkleB: {
-    top: 148,
-    right: 66,
-    width: 8,
-    height: 8,
-  },
-  sparkleC: {
-    top: 136,
-    right: 94,
-    width: 6,
-    height: 6,
   },
   emptyState: {
     width: '100%',

@@ -20,7 +20,6 @@ import CoastalGradient from '../../components/CoastalGradient'
 import WaveRefreshOverlay from '../../components/WaveRefreshOverlay'
 import { useAppTheme } from '../../context/AppThemeContext'
 import { AuthContext } from '../../context/AuthContext'
-import RefreshGridRippleOverlay from '../../components/RefreshGridRippleOverlay'
 
 const CATEGORY_FILTERS = ['All', ...POST_CATEGORIES, 'Muted', 'Hidden']
 
@@ -37,7 +36,6 @@ export default function MapScreen() {
   const [error, setError] = useState(null)
   const [selectedCategory, setSelectedCategory] = useState('All')
   const waveRef = useRef(null)
-  const rippleRef = useRef(null)
 
   // Redirect unauthenticated users to StartScreen
   useEffect(() => {
@@ -49,7 +47,6 @@ export default function MapScreen() {
   const fetchPosts = useCallback(async (withWave = false) => {
     if (withWave) {
       waveRef.current?.trigger()
-      rippleRef.current?.trigger()
     }
     setLoading(true)
     setError(null)
@@ -217,7 +214,6 @@ export default function MapScreen() {
           </View>
         </View>
       )}
-      <RefreshGridRippleOverlay ref={rippleRef} />
       <WaveRefreshOverlay ref={waveRef} />
     </CoastalGradient>
   )
