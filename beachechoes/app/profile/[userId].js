@@ -1,10 +1,10 @@
-import React, { useContext, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useContext, useEffect, useRef, useState } from 'react'
 import {
   View, Text, Image, StyleSheet,
   ScrollView, Alert, TouchableOpacity,
   Switch,
 } from 'react-native'
-import { useLocalSearchParams, useRouter } from 'expo-router'
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import Background from '../../components/Background'
 import Header from '../../components/Header'
 import Button from '../../components/Button'
@@ -15,6 +15,13 @@ import { API_BASE } from '../../config/api'
 import { theme } from '../../core/theme'
 
 import logo from '../../assets/images/logo.png'
+
+const normalizeRelationshipStatus = (status) => {
+  if (status === 'accepted' || status === 'following') return 'following'
+  if (status === 'pending' || status === 'requested') return 'requested'
+  if (['self', 'incoming_request', 'declined', 'none'].includes(status)) return status
+  return 'none'
+}
 
 /**
  * Public profile screen reached via Discover → user tap.
@@ -27,6 +34,7 @@ export default function UserProfile() {
   const { user: currentUser } = useContext(AuthContext)
   const scrollRef = useRef(null)
   const echoesYRef = useRef(0)
+  const skipInitialFocusRefreshRef = useRef(true)
 
   const [name, setName] = useState('')
   const [bio, setBio] = useState('')
@@ -39,29 +47,44 @@ export default function UserProfile() {
   const [followingCount, setFollowingCount] = useState(0)
   const [followersCount, setFollowersCount] = useState(0)
 
-  // Relationship state: self | none | following
+  // Relationship state: self | none | following | requested | incoming_request | declined
   const [relationship, setRelationship] = useState('none')
   const [friendshipLoading, setFriendshipLoading] = useState(false)
   const [muted, setMuted] = useState(false)
   const [muteLoading, setMuteLoading] = useState(false)
 
-  useEffect(() => {
-    if (!userId) return
-    fetchProfile()
-    fetchFriendshipStatus()
-    fetchMuteStatus()
-  }, [userId])
-
-  const getToken = async () => {
+  const getToken = useCallback(async () => {
     return await auth.currentUser?.getIdToken()
-  }
+  }, [])
 
-  const fetchProfile = async () => {
+  const fetchPosts = useCallback(async (neonUserId) => {
+    try {
+      // Include auth token to get liked status
+      const token = await getToken()
+      const headers = token ? { Authorization: `Bearer ${token}` } : {}
+
+      const res = await fetch(`${API_BASE}/posts/user/${neonUserId}`, { headers })
+      const data = await res.json()
+      if (data?.success) {
+        setPosts(data.posts ?? [])
+      }
+    } catch (err) {
+      console.log('Failed to fetch posts:', err)
+    }
+  }, [getToken])
+
+  const fetchProfile = useCallback(async ({ refreshPosts = true } = {}) => {
+    if (!userId) {
+      setLoading(false)
+      return
+    }
+
     try {
       const res = await fetch(`${API_BASE}/profile/${encodeURIComponent(userId)}`)
       const data = await res.json()
 
       if (data?.success && data?.profile) {
+        setError(null)
         setName(data.profile.name ?? '')
         setBio(data.profile.bio ?? '')
         setAvatarUrl(data.profile.avatar_url ?? data.profile.avatarUrl ?? null)
@@ -71,7 +94,9 @@ export default function UserProfile() {
         setFollowersCount(data.profile.followers_count ?? 0)
 
         if (data.profile.id) {
-          await fetchPosts(data.profile.id)
+          if (refreshPosts) {
+            await fetchPosts(data.profile.id)
+          }
         }
       } else {
         setError(data?.error || 'Profile not found')
@@ -82,38 +107,12 @@ export default function UserProfile() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [fetchPosts, userId])
 
-  const fetchPosts = async (neonUserId) => {
-    try {
-      // Include auth token to get liked status
-      const token = await getToken()
-      const headers = token ? { Authorization: `Bearer ${token}` } : {}
-      
-      const res = await fetch(`${API_BASE}/posts/user/${neonUserId}`, { headers })
-      const data = await res.json()
-      if (data?.success) {
-        setPosts(data.posts ?? [])
-      }
-    } catch (err) {
-      console.log('Failed to fetch posts:', err)
-    }
-  }
-
-  const handleLikeToggle = (postId, liked, likeCount) => {
-    setPosts(prevPosts => 
-      prevPosts.map(post => 
-        post.id === postId 
-          ? { ...post, liked, like_count: likeCount }
-          : post
-      )
-    )
-  }
-
-  const fetchFriendshipStatus = async () => {
+  const fetchFriendshipStatus = useCallback(async () => {
     try {
       const token = await getToken()
-      if (!token) return
+      if (!token || !userId) return
 
       const res = await fetch(`${API_BASE}/friendships/status/${encodeURIComponent(userId)}`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -122,21 +121,21 @@ export default function UserProfile() {
 
       if (data?.success) {
         // Mirror the backend's one-way relationship model instead of inferring it client-side.
-        setRelationship(data.relationship || 'none')
+        setRelationship(normalizeRelationshipStatus(data.status || data.relationship))
       }
     } catch (err) {
       console.log('Failed to fetch friendship status:', err)
     }
-  }
+  }, [getToken, userId])
 
-  const fetchMuteStatus = async () => {
+  const fetchMuteStatus = useCallback(async () => {
     try {
       if (!currentUser?.uid || currentUser.uid === userId) {
         setMuted(false)
         return
       }
       const token = await getToken()
-      if (!token) return
+      if (!token || !userId) return
 
       const res = await fetch(`${API_BASE}/users/${encodeURIComponent(userId)}/mute-status`, {
         headers: { Authorization: `Bearer ${token}` },
@@ -148,6 +147,41 @@ export default function UserProfile() {
     } catch (err) {
       console.log('Failed to fetch mute status:', err)
     }
+  }, [currentUser?.uid, getToken, userId])
+
+  useEffect(() => {
+    if (!userId) return
+    skipInitialFocusRefreshRef.current = true
+    fetchProfile({ refreshPosts: true })
+  }, [fetchProfile, userId])
+
+  useEffect(() => {
+    if (!userId) return
+    fetchFriendshipStatus()
+    fetchMuteStatus()
+  }, [fetchFriendshipStatus, fetchMuteStatus, userId])
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!userId) return undefined
+      if (skipInitialFocusRefreshRef.current) {
+        skipInitialFocusRefreshRef.current = false
+        return undefined
+      }
+      fetchProfile({ refreshPosts: false })
+      fetchFriendshipStatus()
+      return undefined
+    }, [fetchFriendshipStatus, fetchProfile, userId])
+  )
+
+  const handleLikeToggle = (postId, liked, likeCount) => {
+    setPosts(prevPosts => 
+      prevPosts.map(post => 
+        post.id === postId 
+          ? { ...post, liked, like_count: likeCount }
+          : post
+      )
+    )
   }
 
   const handleMuteToggle = async (nextMuted) => {
@@ -193,9 +227,13 @@ export default function UserProfile() {
       const data = await res.json()
 
       if (data?.success) {
-        // Follow is instant (no approval required)
-        setRelationship('following')
-        await fetchProfile()
+        const nextRelationship = normalizeRelationshipStatus(data.status || data.relationship || 'requested')
+        const wasFollowing = relationship === 'following'
+        setRelationship(nextRelationship)
+        if (!wasFollowing && nextRelationship === 'following') {
+          setFollowersCount((count) => count + 1)
+        }
+        await fetchProfile({ refreshPosts: false })
       } else {
         Alert.alert('Error', data?.error || 'Failed to follow')
       }
@@ -234,8 +272,12 @@ export default function UserProfile() {
       const data = await res.json()
 
       if (data?.success) {
+        const wasFollowing = relationship === 'following'
         setRelationship('none')
-        await fetchProfile()
+        if (wasFollowing) {
+          setFollowersCount((count) => Math.max(0, count - 1))
+        }
+        await fetchProfile({ refreshPosts: false })
       } else {
         Alert.alert('Error', data?.error || 'Failed to unfollow')
       }
@@ -253,6 +295,9 @@ export default function UserProfile() {
   const getFollowButton = () => {
     if (relationship === 'following') {
       return { label: 'Following', onPress: handleUnfollow, disabled: false, mode: 'outlined' }
+    }
+    if (relationship === 'requested') {
+      return { label: 'Requested', onPress: undefined, disabled: true, mode: 'outlined', labelStyle: styles.requestedButtonText }
     }
     // Private/public approval rules are handled by the backend follow endpoint.
     return { label: 'Follow', onPress: handleFollow, disabled: false, mode: 'contained' }
@@ -347,6 +392,7 @@ export default function UserProfile() {
             mode={followBtn.mode}
             onPress={followBtn.onPress}
             disabled={followBtn.disabled || friendshipLoading}
+            labelStyle={followBtn.labelStyle}
           >
             {friendshipLoading ? 'Loading...' : followBtn.label}
           </Button>
@@ -557,5 +603,8 @@ const styles = StyleSheet.create({
     color: theme.colors.error,
     textAlign: 'center',
     marginVertical: 12,
+  },
+  requestedButtonText: {
+    color: '#ffffff',
   },
 })

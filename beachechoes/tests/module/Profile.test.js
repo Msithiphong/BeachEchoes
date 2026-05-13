@@ -1,6 +1,6 @@
 // Module-level profile coverage for data loading, edit mode, and settings menu behavior.
 import React from 'react';
-import { render, fireEvent, waitFor } from '@testing-library/react-native';
+import { act, render, fireEvent, waitFor } from '@testing-library/react-native';
 import { PaperProvider } from 'react-native-paper';
 import { Switch } from 'react-native';
 import Profile from '../../app/(tabs)/Profile';
@@ -8,11 +8,18 @@ import { AuthContext } from '../../context/AuthContext';
 import { auth } from '../../config/firebase';
 
 // Mock expo-router
+const mockFocusCallbacks = [];
+
 jest.mock('expo-router', () => ({
   useRouter: jest.fn(() => ({
     push: jest.fn(),
     back: jest.fn(),
   })),
+  useFocusEffect: jest.fn((callback) => {
+    mockFocusCallbacks.push(callback);
+    const React = require('react');
+    React.useEffect(() => callback(), [callback]);
+  }),
   Stack: {
     Screen: () => null,
   },
@@ -107,6 +114,7 @@ describe('Profile (Module Level)', () => {
     jest.clearAllMocks();
     mockToggleTheme.mockClear();
     mockLogout.mockClear();
+    mockFocusCallbacks.length = 0;
     auth.currentUser.getIdToken.mockResolvedValue('mock-token');
     global.fetch = jest.fn();
   });
@@ -187,6 +195,63 @@ describe('Profile (Module Level)', () => {
       expect(getByText('100')).toBeTruthy(); // Following count
       expect(getByText('75')).toBeTruthy(); // Followers count
     });
+  });
+
+  it('refreshes profile counts on focus without refetching posts', async () => {
+    let profileCalls = 0;
+    let postCalls = 0;
+
+    global.fetch = jest.fn((url) => {
+      const requestUrl = String(url);
+      if (requestUrl === 'http://localhost:3000/api/profile/user123') {
+        profileCalls += 1;
+        return Promise.resolve({
+          json: async () => ({
+            success: true,
+            profile: {
+              id: 1,
+              name: 'Test User',
+              echoes_count: profileCalls === 1 ? 42 : 43,
+              following_count: profileCalls === 1 ? 100 : 101,
+              followers_count: profileCalls === 1 ? 75 : 76,
+            },
+          }),
+        });
+      }
+
+      if (requestUrl === 'http://localhost:3000/api/posts/user/1') {
+        postCalls += 1;
+        return Promise.resolve({
+          json: async () => ({ success: true, posts: [] }),
+        });
+      }
+
+      return Promise.resolve({
+        json: async () => ({ success: true }),
+      });
+    });
+
+    const { getByText } = renderWithContext(<Profile />);
+
+    await waitFor(() => {
+      expect(getByText('42')).toBeTruthy();
+      expect(getByText('100')).toBeTruthy();
+      expect(getByText('75')).toBeTruthy();
+    });
+    expect(postCalls).toBe(1);
+
+    await act(async () => {
+      const latestFocusCallback = mockFocusCallbacks[mockFocusCallbacks.length - 1];
+      latestFocusCallback();
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(getByText('43')).toBeTruthy();
+      expect(getByText('101')).toBeTruthy();
+      expect(getByText('76')).toBeTruthy();
+    });
+    expect(postCalls).toBe(1);
   });
 
   it('fetches and displays user posts', async () => {

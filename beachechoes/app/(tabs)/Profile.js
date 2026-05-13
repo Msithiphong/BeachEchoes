@@ -1,10 +1,10 @@
 // Authenticated profile hub for editing the current user and browsing their posts.
-import React, { useContext, useEffect, useRef, useState } from 'react'
+import React, { useCallback, useContext, useEffect, useRef, useState } from 'react'
 import { View, Text, StyleSheet, Image, TextInput, Alert,
   TouchableOpacity, ActivityIndicator, ScrollView,
 } from 'react-native'
 import { MaterialIcons } from '@expo/vector-icons'
-import { useRouter } from 'expo-router'
+import { useFocusEffect, useRouter } from 'expo-router'
 import * as ImagePicker from 'expo-image-picker'
 import { Menu } from 'react-native-paper'
 import Background from '../../components/Background'
@@ -27,6 +27,7 @@ export default function Profile() {
   const router = useRouter()
   const scrollRef = useRef(null)
   const echoesYRef = useRef(0)
+  const skipInitialFocusRefreshRef = useRef(true)
 
   const [dropdownVisible, setDropdownVisible] = useState(false)
 
@@ -46,19 +47,28 @@ export default function Profile() {
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const [saving, setSaving] = useState(false)
 
-  // Redirect unauthenticated users to StartScreen
-  useEffect(() => {
-    if (!authLoading && !user) {
-      router.replace('/StartScreen')
-    }
-  }, [user, authLoading, router])
+  const fetchPosts = useCallback(async (userId) => {
+    try {
+      // Include auth token to get liked status
+      const token = await auth.currentUser?.getIdToken()
+      const headers = token ? { Authorization: `Bearer ${token}` } : {}
 
-  useEffect(() => {
-    fetchProfile()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+      const res = await fetch(`${API_BASE}/posts/user/${userId}`, { headers })
+      const data = await res.json()
+      if (data?.success) {
+        setPosts(data.posts ?? [])
+      }
+    } catch (error) {
+      console.log('Failed to fetch posts:', error)
+    }
   }, [])
 
-  const fetchProfile = async () => {
+  const fetchProfile = useCallback(async ({ refreshPosts = true } = {}) => {
+    if (!user?.uid) {
+      setLoading(false)
+      return
+    }
+
     try {
       const res = await fetch(`${API_BASE}/profile/${user.uid}`)
       const data = await res.json()
@@ -75,7 +85,9 @@ export default function Profile() {
         // Backend profile data carries the Neon user_id needed by the posts endpoint.
         if (data.profile.id) {
           setNeonUserId(data.profile.id)
-          await fetchPosts(data.profile.id)
+          if (refreshPosts) {
+            await fetchPosts(data.profile.id)
+          }
         }
       }
     } catch (error) {
@@ -83,23 +95,36 @@ export default function Profile() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [fetchPosts, user?.uid])
 
-  const fetchPosts = async (userId) => {
-    try {
-      // Include auth token to get liked status
-      const token = await auth.currentUser?.getIdToken()
-      const headers = token ? { Authorization: `Bearer ${token}` } : {}
-      
-      const res = await fetch(`${API_BASE}/posts/user/${userId}`, { headers })
-      const data = await res.json()
-      if (data?.success) {
-        setPosts(data.posts ?? [])
-      }
-    } catch (error) {
-      console.log('Failed to fetch posts:', error)
+  // Redirect unauthenticated users to StartScreen
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.replace('/StartScreen')
     }
-  }
+  }, [user, authLoading, router])
+
+  useEffect(() => {
+    if (authLoading) return
+    if (!user?.uid) {
+      setLoading(false)
+      return
+    }
+    skipInitialFocusRefreshRef.current = true
+    fetchProfile({ refreshPosts: true })
+  }, [authLoading, fetchProfile, user?.uid])
+
+  useFocusEffect(
+    useCallback(() => {
+      if (authLoading || !user?.uid) return undefined
+      if (skipInitialFocusRefreshRef.current) {
+        skipInitialFocusRefreshRef.current = false
+        return undefined
+      }
+      fetchProfile({ refreshPosts: false })
+      return undefined
+    }, [authLoading, fetchProfile, user?.uid])
+  )
 
   const handleLikeToggle = (postId, liked, likeCount) => {
     setPosts(prevPosts => 
@@ -152,7 +177,7 @@ export default function Profile() {
   const cancelEditing = async () => {
     if (saving) return
     setEditing(false)
-    await fetchProfile()
+    await fetchProfile({ refreshPosts: false })
   }
 
   // Navigate to the selected user's profile (or stay on Profile tab if it's the current user)

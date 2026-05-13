@@ -4,7 +4,7 @@ import { Button as PaperButton } from 'react-native-paper'
 import { theme } from '../core/theme'
 
 // Thin wrapper so the app can share one button shape/text treatment everywhere.
-export default function Button({ mode, style, ...props }) {
+export default function Button({ mode, style, labelStyle, ...props }) {
   return (
     <PaperButton
       style={[
@@ -12,7 +12,7 @@ export default function Button({ mode, style, ...props }) {
         mode === 'outlined' && { backgroundColor: theme.colors.primary },
         style,
       ]}
-      labelStyle={styles.text}
+      labelStyle={[styles.text, labelStyle]}
       textColor='#ffffff'
       mode={mode}
       {...props}

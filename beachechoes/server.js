@@ -340,6 +340,11 @@ async function resolveUserId(firebaseUid) {
   return rows.length ? rows[0].user_id : null
 }
 
+async function invalidateProfileCaches(...firebaseUids) {
+  const uniqueUids = [...new Set(firebaseUids.filter(Boolean))]
+  await Promise.all(uniqueUids.map((firebaseUid) => cacheDel(CacheKeys.profile(firebaseUid))))
+}
+
 async function resolveViewerUserId(req) {
   const authHeader = req.headers.authorization
   if (!authHeader || !authHeader.startsWith('Bearer ')) return null
@@ -588,6 +593,8 @@ app.post('/api/friendships/follow', requireFirebaseAuth, async (req, res) => {
       }
     }
 
+    await invalidateProfileCaches(req.firebase.uid, friendUid)
+
     res.json({ success: true, status: 'pending' })
   } catch (error) {
     console.error('Follow error:', error)
@@ -644,6 +651,8 @@ app.put('/api/friendships/accept', requireFirebaseAuth, async (req, res) => {
         AND type = 'friend_request'
         AND (data->>'from_firebase_uid')::text = ${friend_firebase_uid}
     `
+
+    await invalidateProfileCaches(req.firebase.uid, friend_firebase_uid)
 
     res.json({ success: true })
   } catch (error) {
@@ -712,6 +721,8 @@ app.delete('/api/friendships/unfollow', requireFirebaseAuth, async (req, res) =>
         AND friend_id = ${friendId}
     `
 
+    await invalidateProfileCaches(req.firebase.uid, friendUid)
+
     res.json({ success: true })
   } catch (error) {
     console.error('Unfollow error:', error)
@@ -742,6 +753,8 @@ app.delete('/api/friendships/remove-follower', requireFirebaseAuth, async (req, 
       WHERE user_id = ${followerId} 
         AND friend_id = ${myId}
     `
+
+    await invalidateProfileCaches(req.firebase.uid, followerUid)
 
     res.json({ success: true })
   } catch (error) {
