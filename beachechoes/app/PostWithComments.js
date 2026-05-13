@@ -1,5 +1,5 @@
 // Full post thread screen with paginated comments, replies, and post-level actions.
-import React, { useEffect, useState, useContext, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useContext, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   FlatList,
@@ -104,7 +104,7 @@ function normalizeCommentThread(items = []) {
 }
 
 export default function PostWithComments() {
-  const router = useRouter();
+  const { push, back } = useRouter();
   const { postId, includeMuted, includeHidden } = useLocalSearchParams();
   const { user } = useContext(AuthContext);
 
@@ -200,16 +200,16 @@ export default function PostWithComments() {
     }
   };
 
-  const handleDeleted = (postId) => {
+  const handleDeleted = useCallback(() => {
     Alert.alert('Post Deleted', 'This post has been deleted.', [
       {
         text: 'OK',
-        onPress: () => router.back(),
+        onPress: () => back(),
       },
     ]);
-  };
+  }, [back]);
 
-  const handleHideToggle = async () => {
+  const handleHideToggle = useCallback(async () => {
     if (!post?.id || !user) return;
 
     const nextHidden = includeHidden !== '1';
@@ -238,14 +238,14 @@ export default function PostWithComments() {
       Alert.alert(title, message, [
         {
           text: 'OK',
-          onPress: () => router.back(),
+          onPress: () => back(),
         },
       ]);
     } catch (err) {
       console.error('Hide toggle error:', err);
       Alert.alert('Error', 'Failed to update hidden status');
     }
-  };
+  }, [back, includeHidden, post?.id, user]);
 
   const handlePickImage = async () => {
     try {
@@ -418,7 +418,7 @@ export default function PostWithComments() {
       <View style={[styles.commentCard, isReply && styles.replyCard]}>
         <View style={styles.commentHeader}>
           <TouchableOpacity
-            onPress={() => item.firebase_uid && router.push(`/profile/${item.firebase_uid}`)}
+            onPress={() => item.firebase_uid && push(`/profile/${item.firebase_uid}`)}
             style={styles.commentAuthor}
           >
             {item.avatar_url ? (
@@ -490,7 +490,7 @@ export default function PostWithComments() {
             <View key={String(reply.id)} style={styles.replyCard}>
               <View style={styles.commentHeader}>
                 <TouchableOpacity
-                  onPress={() => reply.firebase_uid && router.push(`/profile/${reply.firebase_uid}`)}
+                  onPress={() => reply.firebase_uid && push(`/profile/${reply.firebase_uid}`)}
                   style={styles.commentAuthor}
                 >
                   {reply.avatar_url ? (
@@ -529,7 +529,7 @@ export default function PostWithComments() {
     );
   };
 
-  const renderHeader = () => {
+  const postHeader = useMemo(() => {
     if (!post) return null;
 
     const createdLabel = formatDateTime(post.created_at);
@@ -542,7 +542,7 @@ export default function PostWithComments() {
         <View style={styles.authorRow}>
           <Text style={styles.authorPrefix}>Posted by </Text>
           <TouchableOpacity
-            onPress={() => canOpenProfile && router.push(`/profile/${post.owner_firebase_uid}`)}
+            onPress={() => canOpenProfile && push(`/profile/${post.owner_firebase_uid}`)}
             disabled={!canOpenProfile}
           >
             <Text style={[styles.authorLabel, canOpenProfile && styles.authorLink]}>
@@ -601,7 +601,7 @@ export default function PostWithComments() {
         </View>
       </View>
     );
-  };
+  }, [comments.length, handleHideToggle, includeHidden, post, push, user]);
 
   const renderFooter = () => {
     if (!loadingMore) return null;
@@ -621,7 +621,7 @@ export default function PostWithComments() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+          <TouchableOpacity onPress={() => back()} style={styles.backBtn}>
             <MaterialIcons name="arrow-back" size={24} color="#0f172a" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Post & Comments</Text>
@@ -638,7 +638,7 @@ export default function PostWithComments() {
               data={comments}
               keyExtractor={(item) => String(item.id)}
               renderItem={renderCommentItem}
-              ListHeaderComponent={renderHeader}
+              ListHeaderComponent={postHeader}
               ListFooterComponent={renderFooter}
               ListEmptyComponent={
                 !loading && <Text style={styles.noComments}>No comments yet. Be the first!</Text>

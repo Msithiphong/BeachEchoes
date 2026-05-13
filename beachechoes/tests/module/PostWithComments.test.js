@@ -10,6 +10,8 @@ import { auth } from '../../config/firebase';
 const mockPush = jest.fn();
 const mockBack = jest.fn();
 let mockSearchParams = { postId: '123' };
+const mockPostImageMount = jest.fn();
+const mockPostImageUnmount = jest.fn();
 
 jest.mock('expo-router', () => ({
   useRouter: jest.fn(() => ({
@@ -65,6 +67,25 @@ jest.mock('../../components/DeletePostModal', () => {
   const React = require('react');
   const { View } = require('react-native');
   return () => <View testID="delete-modal" />;
+});
+
+jest.mock('../../components/PostImageWithOverlay', () => {
+  const React = require('react');
+  const { Text, View } = require('react-native');
+
+  return function MockPostImageWithOverlay({ imageUri, overlayText }) {
+    React.useEffect(() => {
+      mockPostImageMount();
+      return () => mockPostImageUnmount();
+    }, []);
+
+    return (
+      <View testID="post-image-with-overlay">
+        <Text>{imageUri}</Text>
+        {!!overlayText && <Text>{overlayText}</Text>}
+      </View>
+    );
+  };
 });
 
 jest.mock('../../components/CoastalGradient', () => {
@@ -449,6 +470,43 @@ describe('PostWithComments (Module Level)', () => {
         headers: { Authorization: 'Bearer mock-token' },
       })
     );
+  });
+
+  it('keeps the post image mounted while typing a comment', async () => {
+    const mockPost = {
+      success: true,
+      posts: [
+        {
+          id: 123,
+          image_url: 'https://example.com/image.jpg',
+          overlay_text: 'Stable post image',
+          like_count: 10,
+          username: 'Alice',
+          owner_firebase_uid: 'user456',
+        },
+      ],
+    };
+
+    global.fetch
+      .mockResolvedValueOnce({ ok: true, json: async () => mockPost })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ success: true, comments: [] }) });
+
+    const { getByPlaceholderText, getByText } = renderWithContext(<PostWithComments />);
+
+    await waitFor(() => {
+      expect(getByText('Stable post image')).toBeTruthy();
+      expect(mockPostImageMount).toHaveBeenCalledTimes(1);
+    }, { timeout: 3000 });
+
+    fireEvent.changeText(getByPlaceholderText('Add a comment...'), 'A');
+
+    await waitFor(() => {
+      expect(getByPlaceholderText('Add a comment...').props.value).toBe('A');
+    });
+
+    expect(mockPostImageMount).toHaveBeenCalledTimes(1);
+    expect(mockPostImageUnmount).not.toHaveBeenCalled();
+    expect(global.fetch).toHaveBeenCalledTimes(2);
   });
 
   it('handles API errors gracefully', async () => {

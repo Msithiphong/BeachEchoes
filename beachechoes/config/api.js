@@ -64,10 +64,10 @@ const getApiUrl = () => {
       // return 'http://192.168.1.XXX:3000'
     } else {
       // iOS simulator can use localhost directly
-      return 'http://localhost:3000'
+      // return 'http://localhost:3000'
 
       // For testing iOS on Max's PC
-      // return 'http://192.168.1.117:3000'
+      return 'http://192.168.1.117:3000'
     }
   }
   
