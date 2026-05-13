@@ -61,6 +61,16 @@ jest.mock('../../components/DeletePostModal', () => {
   return () => <View testID="delete-modal" />;
 });
 
+jest.mock('../../components/CoastalGradient', () => {
+  const React = require('react');
+  const { View } = require('react-native');
+  return ({ children, style }) => (
+    <View testID="coastal-gradient" style={style}>
+      {children}
+    </View>
+  );
+});
+
 jest.mock('../../context/AppThemeContext', () => ({
   useAppTheme: jest.fn(() => ({
     isDark: false,
