@@ -148,6 +148,8 @@ export default function LoginScreen() {
       <TextInput
         label="Email"
         returnKeyType="next"
+        textColor="#000000"
+        placeholderTextColor="#666666"
         value={email.value}
         onChangeText={(text) => setEmail({ value: text, error: '' })}
         error={!!email.error}
@@ -160,6 +162,8 @@ export default function LoginScreen() {
       <TextInput
         label="Password"
         returnKeyType="done"
+        textColor="#000000"
+        placeholderTextColor="#666666"
         value={password.value}
         onChangeText={(text) => setPassword({ value: text, error: '' })}
         error={!!password.error}

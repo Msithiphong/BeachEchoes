@@ -511,6 +511,7 @@ export default function UserProfile() {
                 postId={post.id}
                 image={{ uri: post.image_url }}
                 username={post.is_anonymous ? 'Anonymous' : name}
+                avatarUrl={post.is_anonymous ? null : avatarUrl}
                 likeCount={post.like_count}
                 initialLiked={post.liked}
                 onLikeToggle={handleLikeToggle}

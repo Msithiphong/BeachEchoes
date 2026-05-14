@@ -260,6 +260,7 @@ export default function Dashboard() {
                     postId={post.id}
                     image={{ uri: post.image_url }}
                     username={post.username || 'Anonymous'}
+                    avatarUrl={post.user_avatar_url}
                     ownerFirebaseUid={post.owner_firebase_uid}
                     onUsernamePress={(ownerUid) => router.push(`/profile/${ownerUid}`)}
                     likeCount={post.like_count}

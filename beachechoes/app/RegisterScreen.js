@@ -160,6 +160,8 @@ export default function RegisterScreen() {
       <TextInput
         label="Name"
         returnKeyType="next"
+        textColor="#000000"
+        placeholderTextColor="#666666"
         value={name.value}
         onChangeText={(text) => setName({ value: text, error: '' })}
         error={!!name.error}
@@ -170,6 +172,8 @@ export default function RegisterScreen() {
       <TextInput
         label="Email"
         returnKeyType="next"
+        textColor="#000000"
+        placeholderTextColor="#666666"
         value={email.value}
         onChangeText={(text) => setEmail({ value: text, error: '' })}
         error={!!email.error}
@@ -184,6 +188,8 @@ export default function RegisterScreen() {
       <TextInput
         label="Password"
         returnKeyType="done"
+        textColor="#000000"
+        placeholderTextColor="#666666"
         value={password.value}
         onChangeText={(text) => setPassword({ value: text, error: '' })}
         error={!!password.error}
