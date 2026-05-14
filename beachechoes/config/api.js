@@ -29,8 +29,8 @@ import { Platform } from 'react-native'
  * Set to null to use platform-specific localhost URLs
  * @constant {string|null}
  */
-// const NGROK_URL = 'https://friction-referable-spinster.ngrok-free.dev'
-const NGROK_URL = null
+const NGROK_URL = 'https://friction-referable-spinster.ngrok-free.dev'
+// const NGROK_URL = null
 
 /**
  * Get the API base URL based on the platform and environment

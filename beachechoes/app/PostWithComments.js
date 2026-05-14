@@ -14,6 +14,7 @@ import {
   Platform,
   LayoutAnimation,
   UIManager,
+  Keyboard,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
@@ -125,8 +126,10 @@ export default function PostWithComments() {
 
   // Track which parent comments have their replies expanded
   const [expandedReplies, setExpandedReplies] = useState({});
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   const flatListRef = useRef(null);
+  const textInputRef = useRef(null);
 
   // Fetch post details
   const fetchPost = useCallback(async () => {
@@ -193,6 +196,34 @@ export default function PostWithComments() {
     fetchPost();
     fetchComments();
   }, [postId, fetchPost, fetchComments]);
+
+  // Keyboard listeners for auto-scroll behavior
+  useEffect(() => {
+    const keyboardWillShowListener = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      (e) => {
+        setKeyboardHeight(e.endCoordinates.height);
+        // Scroll to show some context above the input when keyboard opens
+        setTimeout(() => {
+          if (flatListRef.current && comments.length > 0) {
+            flatListRef.current.scrollToEnd({ animated: true });
+          }
+        }, 100);
+      }
+    );
+
+    const keyboardWillHideListener = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide',
+      () => {
+        setKeyboardHeight(0);
+      }
+    );
+
+    return () => {
+      keyboardWillShowListener.remove();
+      keyboardWillHideListener.remove();
+    };
+  }, [comments.length]);
 
   const handleLoadMore = () => {
     if (!loadingMore && hasMore && nextCursor) {
@@ -617,7 +648,7 @@ export default function PostWithComments() {
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.container}
-        keyboardVerticalOffset={0}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
       >
         {/* Header */}
         <View style={styles.header}>
@@ -643,14 +674,20 @@ export default function PostWithComments() {
               ListEmptyComponent={
                 !loading && <Text style={styles.noComments}>No comments yet. Be the first!</Text>
               }
-              contentContainerStyle={styles.list}
+              contentContainerStyle={[
+                styles.list,
+                { paddingBottom: 180 }
+              ]}
               showsVerticalScrollIndicator={false}
               onEndReached={handleLoadMore}
               onEndReachedThreshold={0.5}
             />
 
             {/* Comment Input */}
-            <View style={styles.inputContainer}>
+            <View style={[
+              styles.inputContainer,
+              { bottom: keyboardHeight }
+            ]}>
               {replyTo && (
                 <View style={styles.replyBanner}>
                   <Text style={styles.replyText}>Replying to {replyTo.username}</Text>
@@ -675,6 +712,7 @@ export default function PostWithComments() {
                   <MaterialIcons name="image" size={22} color="#64748b" />
                 </TouchableOpacity>
                 <TextInput
+                  ref={textInputRef}
                   style={styles.input}
                   placeholder={replyTo ? `Reply to ${replyTo.username}...` : 'Add a comment...'}
                   placeholderTextColor="#94a3b8"
@@ -747,7 +785,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 12,
   },
-  list: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 120 },
+  list: { paddingHorizontal: 16, paddingTop: 8 },
   postCard: {
     backgroundColor: 'rgba(255,255,255,0.88)',
     borderRadius: 18,

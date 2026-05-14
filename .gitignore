@@ -19,6 +19,9 @@ Thumbs.db
 # Logs
 *.log
 
+# Redis
+dump.rdb
+
 # Node modules
 node_modules/
 
