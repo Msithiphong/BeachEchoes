@@ -28,6 +28,15 @@ export default function StartScreen() {
   // Navigation hook for routing between screens
   const router = useRouter()
   
+  // Check environment variables for dev button visibility
+  // Accept 'true', 'TRUE', 'True', or '1' as truthy values
+  const isDashboardEnabled = ['true', 'TRUE', 'True', '1'].includes(
+    process.env.EXPO_PUBLIC_ENABLE_DASHBOARD_BUTTON?.trim()
+  )
+  const isAdminDashboardEnabled = ['true', 'TRUE', 'True', '1'].includes(
+    process.env.EXPO_PUBLIC_ENABLE_ADMIN_DASHBOARD_BUTTON?.trim()
+  )
+  
   return (
     <Background>
       {/* App logo */}
@@ -57,26 +66,25 @@ export default function StartScreen() {
         Sign Up
       </Button>
       
-      {/* Development: Quick access to Dashboard */}
-      <Button
-        mode="outlined"
-        onPress={() => router.push('/Dashboard')}
-      >
-        Dashboard
-      </Button>
+      {/* Development: Quick access to Dashboard (conditionally rendered) */}
+      {isDashboardEnabled && (
+        <Button
+          mode="outlined"
+          onPress={() => router.push('/Dashboard')}
+        >
+          Dashboard
+        </Button>
+      )}
       
-      
-
-      {/* Team/testing shortcut kept visible from the welcome screen. */}
-      <Button
-        mode="contained"
-        onPress={() => router.push('/AdminDashboard')}
+      {/* Team/testing shortcut (conditionally rendered) */}
+      {isAdminDashboardEnabled && (
+        <Button
+          mode="contained"
+          onPress={() => router.push('/AdminDashboard')}
         >
           Admin Dashboard
         </Button>
-
-      
-        
+      )}
     </Background>
   )
 }
