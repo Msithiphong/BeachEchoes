@@ -391,6 +391,94 @@ describe('Friend Request and Notification Delivery (Integration Level)', () => {
     });
   });
 
+  it('delivers a reverse friend request after an accepted one-way follow', async () => {
+    let followCalls = 0;
+    let acceptCalls = 0;
+
+    server.use(
+      rest.post('http://localhost:3000/api/friendships/follow', (req, res, ctx) => {
+        followCalls += 1;
+        return res(ctx.json({
+          success: true,
+          status: 'pending',
+        }));
+      }),
+      rest.put('http://localhost:3000/api/friendships/accept', (req, res, ctx) => {
+        acceptCalls += 1;
+        return res(ctx.json({
+          success: true,
+        }));
+      }),
+      rest.get('http://localhost:3000/api/notifications', (req, res, ctx) => {
+        if (followCalls >= 2 && acceptCalls < 2) {
+          return res(ctx.json({
+            success: true,
+            notifications: [
+              {
+                id: 10,
+                type: 'friend_request',
+                data: {
+                  from_user_id: 2,
+                  from_firebase_uid: 'userB-456',
+                  from_user_name: 'User B',
+                  from_avatar_url: 'https://example.com/userB.jpg',
+                },
+                created_at: '2026-05-09T10:05:00Z',
+                read: false,
+              },
+            ],
+          }));
+        }
+
+        return res(ctx.json({
+          success: true,
+          notifications: [],
+        }));
+      })
+    );
+
+    await fetch('http://localhost:3000/api/friendships/follow', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer mock-token',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ friendUid: 'userB-456' }),
+    });
+
+    await fetch('http://localhost:3000/api/friendships/accept', {
+      method: 'PUT',
+      headers: {
+        Authorization: 'Bearer mock-token',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ friend_firebase_uid: 'userA-123' }),
+    });
+
+    await fetch('http://localhost:3000/api/friendships/follow', {
+      method: 'POST',
+      headers: {
+        Authorization: 'Bearer mock-token',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ friendUid: 'userA-123' }),
+    });
+
+    const { getByText, queryByText } = renderWithContext(<Notifications />, mockUserA);
+
+    await waitFor(() => {
+      expect(getByText('User B')).toBeTruthy();
+      expect(getByText(/sent you a friend request/i)).toBeTruthy();
+    });
+
+    fireEvent.press(getByText('Accept'));
+
+    await waitFor(() => {
+      expect(acceptCalls).toBe(2);
+      expect(queryByText('User B')).toBeNull();
+    });
+  });
+
   it('handles multiple notification types simultaneously', async () => {
     const notifications = [
       {

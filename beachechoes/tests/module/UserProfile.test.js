@@ -10,7 +10,11 @@ const mockPush = jest.fn();
 const mockBack = jest.fn();
 let mockSearchParams = { userId: 'target-user-456' };
 let friendshipStatus = 'following';
+let friendshipResponseExtras = {};
 let followStatus = 'pending';
+let acceptNextStatus = 'following';
+let declineNextStatus = 'following';
+let profileFollowingCount = 8;
 let profileFollowersCount = 4;
 const mockAlert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
 
@@ -96,7 +100,11 @@ describe('UserProfile (Module Level)', () => {
     jest.clearAllMocks();
     mockSearchParams = { userId: 'target-user-456' };
     friendshipStatus = 'following';
+    friendshipResponseExtras = {};
     followStatus = 'pending';
+    acceptNextStatus = 'following';
+    declineNextStatus = 'following';
+    profileFollowingCount = 8;
     profileFollowersCount = 4;
     mockAlert.mockImplementation(() => {});
     auth.currentUser.getIdToken.mockResolvedValue('mock-token');
@@ -112,7 +120,7 @@ describe('UserProfile (Module Level)', () => {
             bio: 'Public profile',
             avatar_url: null,
             echoes_count: 1,
-            following_count: 8,
+            following_count: profileFollowingCount,
             followers_count: profileFollowersCount,
           },
         });
@@ -122,6 +130,7 @@ describe('UserProfile (Module Level)', () => {
         return jsonResponse({
           success: true,
           status: friendshipStatus,
+          ...friendshipResponseExtras,
         });
       }
 
@@ -143,6 +152,35 @@ describe('UserProfile (Module Level)', () => {
         options.method === 'DELETE'
       ) {
         profileFollowersCount = 3;
+        return jsonResponse({
+          success: true,
+        });
+      }
+
+      if (
+        requestUrl === 'http://localhost:3000/api/friendships/accept' &&
+        options.method === 'PUT'
+      ) {
+        friendshipStatus = acceptNextStatus;
+        friendshipResponseExtras = {
+          outgoing_status: acceptNextStatus === 'following' ? 'accepted' : null,
+          incoming_status: 'accepted',
+        };
+        profileFollowingCount = 9;
+        return jsonResponse({
+          success: true,
+        });
+      }
+
+      if (
+        requestUrl === 'http://localhost:3000/api/friendships/decline' &&
+        options.method === 'PUT'
+      ) {
+        friendshipStatus = declineNextStatus;
+        friendshipResponseExtras = {
+          outgoing_status: declineNextStatus === 'following' ? 'accepted' : null,
+          incoming_status: null,
+        };
         return jsonResponse({
           success: true,
         });
@@ -204,6 +242,79 @@ describe('UserProfile (Module Level)', () => {
         expect.objectContaining({ color: '#ffffff' })
       );
       expect(queryByTestId('button-Follow')).toBeNull();
+    });
+  });
+
+  it('shows accept and decline controls when an incoming request exists over an outgoing follow', async () => {
+    friendshipStatus = 'incoming_request';
+    friendshipResponseExtras = {
+      outgoing_status: 'accepted',
+      incoming_status: 'pending',
+    };
+
+    const { getByTestId, queryByTestId } = renderWithContext(<UserProfile />);
+
+    await waitFor(() => {
+      expect(getByTestId('button-Accept')).toBeTruthy();
+      expect(getByTestId('button-Decline')).toBeTruthy();
+      expect(queryByTestId('button-Following')).toBeNull();
+      expect(queryByTestId('button-Follow')).toBeNull();
+    });
+  });
+
+  it('accepts an incoming request from the profile fallback controls', async () => {
+    friendshipStatus = 'incoming_request';
+    friendshipResponseExtras = {
+      outgoing_status: 'accepted',
+      incoming_status: 'pending',
+    };
+    acceptNextStatus = 'following';
+
+    const { getByTestId } = renderWithContext(<UserProfile />);
+
+    await waitFor(() => {
+      expect(getByTestId('button-Accept')).toBeTruthy();
+    });
+
+    fireEvent.press(getByTestId('button-Accept'));
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/friendships/accept',
+        expect.objectContaining({
+          method: 'PUT',
+          body: JSON.stringify({ friend_firebase_uid: 'target-user-456' }),
+        })
+      );
+      expect(getByTestId('button-Following')).toBeTruthy();
+    });
+  });
+
+  it('declines an incoming request from the profile fallback controls', async () => {
+    friendshipStatus = 'incoming_request';
+    friendshipResponseExtras = {
+      outgoing_status: 'accepted',
+      incoming_status: 'pending',
+    };
+    declineNextStatus = 'following';
+
+    const { getByTestId } = renderWithContext(<UserProfile />);
+
+    await waitFor(() => {
+      expect(getByTestId('button-Decline')).toBeTruthy();
+    });
+
+    fireEvent.press(getByTestId('button-Decline'));
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        'http://localhost:3000/api/friendships/decline',
+        expect.objectContaining({
+          method: 'PUT',
+          body: JSON.stringify({ friend_firebase_uid: 'target-user-456' }),
+        })
+      );
+      expect(getByTestId('button-Following')).toBeTruthy();
     });
   });
 

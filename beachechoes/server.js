@@ -8,6 +8,8 @@ import { createRequire } from 'module'
 import { VALID_CAMPUS_POLYGON } from './config/campusMap.js'
 import { DEFAULT_POST_CATEGORY, isValidPostCategory } from './config/postCategories.js'
 import { initRedis, cacheGet, cacheSet, cacheDel, cacheDelPattern, CacheKeys, CacheTTL } from './helpers/redisClient.js'
+import { resolveFriendshipStatus } from './helpers/friendshipStatus.js'
+import { isPendingFriendRequestNotification } from './helpers/notificationUtils.js'
 
 const require = createRequire(import.meta.url)
 const leoProfanity = require('leo-profanity')
@@ -402,6 +404,18 @@ const NOTIFICATION_TYPES = {
 
 const MAX_NOTIFICATIONS_PER_USER = 15
 
+async function enforceNotificationLimit(userId) {
+  await sql`
+    DELETE FROM notifications
+    WHERE id IN (
+      SELECT id FROM notifications
+      WHERE user_id = ${userId}
+      ORDER BY created_at DESC
+      OFFSET ${MAX_NOTIFICATIONS_PER_USER}
+    )
+  `
+}
+
 /**
  * Create a notification for a user (modular, WebSocket-ready)
  * @param {number} userId - Recipient user ID
@@ -411,22 +425,28 @@ const MAX_NOTIFICATIONS_PER_USER = 15
  */
 async function createNotification(userId, type, data, fromUserId = null) {
   try {
-    // Insert new notification
-    await sql`
-      INSERT INTO notifications (user_id, type, data, created_at, read, from_user_id)
-      VALUES (${userId}, ${type}, ${JSON.stringify(data)}, NOW(), FALSE, ${fromUserId})
-    `
+    if (isPendingFriendRequestNotification(type, data, fromUserId)) {
+      await sql`
+        INSERT INTO notifications (user_id, type, data, created_at, read, from_user_id)
+        VALUES (${userId}, ${type}, ${JSON.stringify(data)}, NOW(), FALSE, ${fromUserId})
+        ON CONFLICT (user_id, from_user_id, type)
+          WHERE type = 'friend_request'
+            AND read = FALSE
+            AND from_user_id IS NOT NULL
+            AND (data->>'accepted') IS NULL
+        DO UPDATE SET
+          data = EXCLUDED.data,
+          created_at = NOW(),
+          read = FALSE
+      `
+    } else {
+      await sql`
+        INSERT INTO notifications (user_id, type, data, created_at, read, from_user_id)
+        VALUES (${userId}, ${type}, ${JSON.stringify(data)}, NOW(), FALSE, ${fromUserId})
+      `
+    }
 
-    // Enforce max 15 notifications per user (delete oldest if over limit)
-    await sql`
-      DELETE FROM notifications
-      WHERE id IN (
-        SELECT id FROM notifications
-        WHERE user_id = ${userId}
-        ORDER BY created_at DESC
-        OFFSET ${MAX_NOTIFICATIONS_PER_USER}
-      )
-    `
+    await enforceNotificationLimit(userId)
 
     // Future WebSocket hook: emit event here when WebSocket server is added
     // Example: notificationEmitter.emit('new_notification', { userId, type, data })
@@ -497,20 +517,19 @@ app.post('/api/notifications/read', requireFirebaseAuth, async (req, res) => {
 // ------------------ END NOTIFICATIONS ------------------
 
 // GET friendship status between the authed user and another user
-// Returns relationship state: self, none, following
-// This is a ONE-WAY check: current user → target user
+// Returns the most actionable relationship state plus directional raw statuses.
 app.get('/api/friendships/status/:friendUid', requireFirebaseAuth, async (req, res) => {
   try {
     const myId = await resolveUserId(req.firebase.uid)
     const friendId = await resolveUserId(req.params.friendUid)
 
     if (!myId || !friendId) {
-      return res.json({ success: true, status: 'none' })
+      return res.json({ success: true, status: 'none', outgoing_status: null, incoming_status: null })
     }
 
     // Check if viewing own profile
     if (myId === friendId) {
-      return res.json({ success: true, status: 'self' })
+      return res.json({ success: true, status: 'self', outgoing_status: null, incoming_status: null })
     }
 
     // Check for outgoing request/relationship (I follow them)
@@ -527,23 +546,16 @@ app.get('/api/friendships/status/:friendUid', requireFirebaseAuth, async (req, r
       WHERE user_id = ${friendId} AND friend_id = ${myId}
     `
 
-    // Determine status based on outgoing/incoming relationships
-    if (outgoing.length > 0) {
-      const outgoingStatus = outgoing[0].status
-      if (outgoingStatus === 'accepted') {
-        return res.json({ success: true, status: 'following' })
-      } else if (outgoingStatus === 'pending') {
-        return res.json({ success: true, status: 'requested' })
-      } else if (outgoingStatus === 'declined') {
-        return res.json({ success: true, status: 'declined' })
-      }
-    }
+    const outgoingStatus = outgoing[0]?.status ?? null
+    const incomingStatus = incoming[0]?.status ?? null
+    const status = resolveFriendshipStatus({ outgoingStatus, incomingStatus })
 
-    if (incoming.length > 0 && incoming[0].status === 'pending') {
-      return res.json({ success: true, status: 'incoming_request' })
-    }
-
-    res.json({ success: true, status: 'none' })
+    res.json({
+      success: true,
+      status,
+      outgoing_status: outgoingStatus,
+      incoming_status: incomingStatus,
+    })
   } catch (error) {
     console.error('Friendship status error:', error)
     res.status(500).json({ success: false, error: 'Internal server error' })
@@ -650,6 +662,7 @@ app.put('/api/friendships/accept', requireFirebaseAuth, async (req, res) => {
       WHERE user_id = ${myId} 
         AND type = 'friend_request'
         AND (data->>'from_firebase_uid')::text = ${friend_firebase_uid}
+        AND (data->>'accepted') IS NULL
     `
 
     await invalidateProfileCaches(req.firebase.uid, friend_firebase_uid)

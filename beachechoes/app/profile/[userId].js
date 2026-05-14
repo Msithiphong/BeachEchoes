@@ -289,6 +289,70 @@ export default function UserProfile() {
     }
   }
 
+  const handleAcceptIncomingRequest = async () => {
+    try {
+      setFriendshipLoading(true)
+      const token = await getToken()
+      if (!token) throw new Error('Not authenticated')
+
+      const res = await fetch(`${API_BASE}/friendships/accept`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ friend_firebase_uid: userId }),
+      })
+      const data = await res.json()
+
+      if (!res.ok || !data?.success) {
+        throw new Error(data?.error || 'Failed to accept friend request')
+      }
+
+      await Promise.all([
+        fetchProfile({ refreshPosts: false }),
+        fetchFriendshipStatus(),
+      ])
+    } catch (err) {
+      console.error('Accept incoming friend request error:', err)
+      Alert.alert('Error', 'Failed to accept friend request')
+    } finally {
+      setFriendshipLoading(false)
+    }
+  }
+
+  const handleDeclineIncomingRequest = async () => {
+    try {
+      setFriendshipLoading(true)
+      const token = await getToken()
+      if (!token) throw new Error('Not authenticated')
+
+      const res = await fetch(`${API_BASE}/friendships/decline`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ friend_firebase_uid: userId }),
+      })
+      const data = await res.json()
+
+      if (!res.ok || !data?.success) {
+        throw new Error(data?.error || 'Failed to decline friend request')
+      }
+
+      await Promise.all([
+        fetchProfile({ refreshPosts: false }),
+        fetchFriendshipStatus(),
+      ])
+    } catch (err) {
+      console.error('Decline incoming friend request error:', err)
+      Alert.alert('Error', 'Failed to decline friend request')
+    } finally {
+      setFriendshipLoading(false)
+    }
+  }
+
 
 
   // Determine follow button label, action, and disabled state based on relationship
@@ -325,6 +389,7 @@ export default function UserProfile() {
   }
 
   const followBtn = getFollowButton()
+  const showFriendshipControls = currentUser?.uid !== userId && relationship !== 'self'
 
   return (
     <Background>
@@ -387,7 +452,26 @@ export default function UserProfile() {
         </View>
 
         {/* Follow / Following button */}
-        {currentUser?.uid !== userId && relationship !== 'self' && (
+        {showFriendshipControls && relationship === 'incoming_request' ? (
+          <View style={styles.incomingRequestActions}>
+            <Button
+              mode="contained"
+              style={styles.incomingRequestButton}
+              onPress={handleAcceptIncomingRequest}
+              disabled={friendshipLoading}
+            >
+              {friendshipLoading ? 'Loading...' : 'Accept'}
+            </Button>
+            <Button
+              mode="outlined"
+              style={[styles.incomingRequestButton, styles.declineIncomingButton]}
+              onPress={handleDeclineIncomingRequest}
+              disabled={friendshipLoading}
+            >
+              Decline
+            </Button>
+          </View>
+        ) : showFriendshipControls && (
           <Button
             mode={followBtn.mode}
             onPress={followBtn.onPress}
@@ -606,5 +690,19 @@ const styles = StyleSheet.create({
   },
   requestedButtonText: {
     color: '#ffffff',
+  },
+  incomingRequestActions: {
+    width: '100%',
+    flexDirection: 'row',
+    gap: 10,
+    marginVertical: 10,
+  },
+  incomingRequestButton: {
+    flex: 1,
+    width: 'auto',
+    marginVertical: 0,
+  },
+  declineIncomingButton: {
+    backgroundColor: theme.colors.error,
   },
 })
